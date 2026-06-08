@@ -2283,19 +2283,19 @@ MARKET_BOARD_DASHBOARD_HTML = r"""
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>NowCast Pro - Kalshi Temperature Board</title>
+  <title>WX Markets Prediction Tables</title>
   <style>
     :root {
-      --bg:#050b08;
-      --card:#07190c;
+      --bg:#0b0f14;
+      --card:#111827;
       --text:#e5e7eb;
       --muted:#7b827f;
-      --green:#22c55e;
+      --accent:#38bdf8;
       --amber:#facc15;
       --blue:#60a5fa;
       --bad:#ef4444;
       --border:#1f2b24;
-      --greenBorder:rgba(34,197,94,.35);
+      --cardBorder:rgba(148,163,184,.24);
     }
 
     * { box-sizing:border-box; }
@@ -2388,8 +2388,8 @@ MARKET_BOARD_DASHBOARD_HTML = r"""
     }
 
     .card {
-      background:linear-gradient(180deg, rgba(13,32,17,.98), rgba(5,18,10,.98));
-      border:1px solid var(--greenBorder);
+      background:linear-gradient(180deg, rgba(17,24,39,.98), rgba(15,23,42,.98));
+      border:1px solid var(--cardBorder);
       border-radius:18px;
       padding:14px;
       box-shadow:0 12px 24px rgba(0,0,0,.28);
@@ -2427,9 +2427,9 @@ MARKET_BOARD_DASHBOARD_HTML = r"""
       font-size:11px;
       font-weight:900;
       white-space:nowrap;
-      border:1px solid rgba(34,197,94,.35);
-      background:rgba(34,197,94,.13);
-      color:var(--green);
+      border:1px solid rgba(56,189,248,.30);
+      background:rgba(56,189,248,.10);
+      color:var(--accent);
       flex:0 0 auto;
     }
 
@@ -2452,7 +2452,7 @@ MARKET_BOARD_DASHBOARD_HTML = r"""
     }
 
     .big-temp {
-      color:var(--green);
+      color:var(--accent);
       font-size:48px;
       line-height:1;
       font-weight:950;
@@ -2491,7 +2491,7 @@ MARKET_BOARD_DASHBOARD_HTML = r"""
       align-items:center;
       min-height:46px;
       background:rgba(0,0,0,.62);
-      border:1px solid rgba(34,197,94,.10);
+      border:1px solid rgba(148,163,184,.12);
       border-radius:12px;
       padding:10px;
       color:rgba(229,231,235,.45);
@@ -2501,7 +2501,7 @@ MARKET_BOARD_DASHBOARD_HTML = r"""
     }
 
     .bucket-row.leader {
-      border-color:rgba(34,197,94,.42);
+      border-color:rgba(56,189,248,.45);
       color:var(--text);
     }
 
@@ -2525,7 +2525,7 @@ MARKET_BOARD_DASHBOARD_HTML = r"""
       flex:0 0 auto;
     }
 
-    .leader-label { color:var(--green); }
+    .leader-label { color:var(--accent); }
     .contender-label { color:#fde047; }
 
     .bucket-label {
@@ -2548,7 +2548,7 @@ MARKET_BOARD_DASHBOARD_HTML = r"""
     }
 
     .yes-price {
-      color:var(--green);
+      color:var(--accent);
       font-weight:950;
     }
 
@@ -2568,7 +2568,7 @@ MARKET_BOARD_DASHBOARD_HTML = r"""
       display:flex;
       align-items:flex-start;
       gap:8px;
-      color:var(--green);
+      color:var(--accent);
       font-size:14px;
       margin-top:16px;
       line-height:1.35;
@@ -2576,7 +2576,7 @@ MARKET_BOARD_DASHBOARD_HTML = r"""
 
     .divider {
       height:1px;
-      background:rgba(34,197,94,.12);
+      background:rgba(148,163,184,.16);
       margin:14px 0;
     }
 
@@ -2604,7 +2604,7 @@ MARKET_BOARD_DASHBOARD_HTML = r"""
       margin-top:16px;
       padding:12px 16px;
       border-radius:10px;
-      color:#052e12;
+      color:#031018;
       background:var(--green);
       text-decoration:none;
       font-weight:950;
@@ -2633,7 +2633,7 @@ MARKET_BOARD_DASHBOARD_HTML = r"""
 </head>
 <body>
 <header>
-  <h1>NowCast Pro - Temperature Market Board</h1>
+  <h1>WX Markets Prediction Tables</h1>
   <div class="sub">
     Leader and contender are based on current Kalshi market favorability using YES bid/ask midpoint.
     Observed bucket is based on public NWS station observations.
@@ -2645,7 +2645,7 @@ MARKET_BOARD_DASHBOARD_HTML = r"""
     <select id="sortMode" onchange="render()">
       <option value="default">Sort: Default</option>
       <option value="leader">Highest favorite first</option>
-      <option value="agree">Lock match first</option>
+      <option value="agree">Market/obs match first</option>
       <option value="city">City A-Z</option>
     </select>
   </div>
@@ -2666,6 +2666,12 @@ function fmtTemp(v) {
 }
 function cents(v) {
   return (v === null || v === undefined || Number.isNaN(v)) ? "—" : `${Math.round(v)}¢`;
+}
+function pricePair(b) {
+  if (!b) return "— / —";
+  const bid = (b.yes_bid !== null && b.yes_bid !== undefined) ? b.yes_bid : b.last_price;
+  const ask = (b.yes_ask !== null && b.yes_ask !== undefined) ? b.yes_ask : b.score;
+  return `${cents(bid)} / ${cents(ask)}`;
 }
 function fmtNum(v) {
   return (v === null || v === undefined) ? "—" : Number(v).toLocaleString();
@@ -2757,7 +2763,7 @@ function observedLeader(c, buckets) {
 function statusFor(leader, obsLead) {
   if (!leader || !obsLead) return {text:"WAITING", cls:"unknown", message:"Waiting for public obs to match a bucket."};
   if (leader.ticker === obsLead.ticker) {
-    return {text:"LOCK MATCH", cls:"", message:"Public observed temp currently matches the market leader bucket."};
+    return {text:"MARKET/OBS MATCH", cls:"", message:"Public observed temp currently matches the market leader bucket."};
   }
 
   const lc = bucketCenter(leader);
@@ -2774,7 +2780,7 @@ function setType(t) {
   marketType = t;
   document.getElementById("lowBtn").classList.toggle("active", t === "low");
   document.getElementById("highBtn").classList.toggle("active", t === "high");
-  document.getElementById("sectionTitle").textContent = t === "low" ? "🔒 LOW Markets" : "🔒 HIGH Markets";
+  document.getElementById("sectionTitle").textContent = t === "low" ? "LOW Markets" : "HIGH Markets";
   render();
 }
 function bucketRow(b, idx, obsLead) {
@@ -2793,8 +2799,8 @@ function bucketRow(b, idx, obsLead) {
       </div>
       <div class="prices">
         <div>
-          <span class="yes-price">${cents(b.yes_bid)}</span>
-          <span class="ask-price"> / ${cents(b.yes_ask)}</span>
+          <span class="yes-price">${pricePair(b).split(" / ")[0]}</span>
+          <span class="ask-price"> / ${pricePair(b).split(" / ")[1]}</span>
         </div>
         <div class="price-caption">YES bid / ask</div>
       </div>
@@ -2819,8 +2825,8 @@ function render() {
     rows.sort((a,b) => {
       const ab = a.markets[marketType].buckets || [];
       const bb = b.markets[marketType].buckets || [];
-      const as = statusFor(marketLeader(ab), observedLeader(a, ab)).text === "LOCK MATCH" ? 0 : 1;
-      const bs = statusFor(marketLeader(bb), observedLeader(b, bb)).text === "LOCK MATCH" ? 0 : 1;
+      const as = statusFor(marketLeader(ab), observedLeader(a, ab)).text === "MARKET/OBS MATCH" ? 0 : 1;
+      const bs = statusFor(marketLeader(bb), observedLeader(b, bb)).text === "MARKET/OBS MATCH" ? 0 : 1;
       return as - bs;
     });
   }
@@ -2846,7 +2852,7 @@ function render() {
             <div class="city">${c.name}</div>
             <div class="market-meta">${marketLabel} · ${c.station}</div>
           </div>
-          <div class="badge ${st.cls}">🔒 ${st.text}</div>
+          <div class="badge ${st.cls}">${st.text}</div>
         </div>
 
         <div class="big-temp">${fmtTemp(obsValue)}</div>
@@ -2867,8 +2873,8 @@ function render() {
         <div class="small-data">
           <div class="small-row"><span>Observed bucket</span><strong>${obsLead ? obsLead.label : "—"}</strong></div>
           <div class="small-row"><span>Observed time</span><strong>${obsTime ? localTime(obsTime, c.tz) : "—"}</strong></div>
-          <div class="small-row"><span>Leader YES bid / ask</span><strong>${lead ? `${cents(lead.yes_bid)} / ${cents(lead.yes_ask)}` : "—"}</strong></div>
-          <div class="small-row"><span>Contender YES bid / ask</span><strong>${cont ? `${cents(cont.yes_bid)} / ${cents(cont.yes_ask)}` : "—"}</strong></div>
+          <div class="small-row"><span>Leader YES bid / ask</span><strong>${lead ? pricePair(lead) : "—"}</strong></div>
+          <div class="small-row"><span>Contender YES bid / ask</span><strong>${cont ? pricePair(cont) : "—"}</strong></div>
           <div class="small-row"><span>Leader volume</span><strong>${lead ? fmtNum(lead.volume) : "—"}</strong></div>
         </div>
 

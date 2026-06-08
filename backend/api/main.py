@@ -1,5 +1,6 @@
 """FastAPI backend for BTC 5-min trading bot dashboard."""
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
@@ -1045,3 +1046,248 @@ async def websocket_events(websocket: WebSocket):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
+
+CURRENT_TEMPS_DASHBOARD_HTML = r"""
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Kalshi WX Current Temps</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #111827;
+      --card2: #1f2937;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --good: #22c55e;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+      --border: #334155;
+    }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    header {
+      padding: 18px 16px 10px;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(8px);
+      z-index: 10;
+    }
+    h1 {
+      margin: 0;
+      font-size: 22px;
+    }
+    .sub {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 4px;
+      line-height: 1.35;
+    }
+    .controls {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    button, select {
+      background: var(--card2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 12px;
+      font-size: 14px;
+    }
+    button {
+      cursor: pointer;
+    }
+    main {
+      padding: 14px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+      gap: 12px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+      box-shadow: 0 10px 20px rgba(0,0,0,.18);
+    }
+    .code {
+      font-size: 13px;
+      color: var(--muted);
+      letter-spacing: .06em;
+      font-weight: 700;
+    }
+    .name {
+      font-size: 15px;
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .temp {
+      font-size: 34px;
+      font-weight: 800;
+      margin-top: 10px;
+    }
+    .time {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 8px;
+      min-height: 16px;
+    }
+    .error {
+      color: var(--bad);
+      font-size: 12px;
+      margin-top: 8px;
+    }
+    a {
+      color: #93c5fd;
+      font-size: 12px;
+      text-decoration: none;
+      display: inline-block;
+      margin-top: 10px;
+    }
+    .footer {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 14px;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Kalshi WX Current Temps</h1>
+  <div class="sub">
+    Current Open-Meteo grid temperatures for the 20-city Kalshi watchlist.
+    This is not official METAR/DSM/CLI settlement data.
+  </div>
+  <div class="controls">
+    <button onclick="loadTemps(true)">Refresh now</button>
+    <select id="sortMode" onchange="renderCards()">
+      <option value="default">Sort: Default</option>
+      <option value="temp_desc">Sort: Hottest first</option>
+      <option value="temp_asc">Sort: Coldest first</option>
+      <option value="code">Sort: City code</option>
+    </select>
+    <span class="sub" id="status">Loading...</span>
+  </div>
+</header>
+
+<main>
+  <div class="grid" id="grid"></div>
+  <div class="footer">
+    Auto-refreshes every 60 minutes while open. Opening or refreshing the page fetches fresh data.
+  </div>
+</main>
+
+<script>
+const CITIES = [
+  {code:"DEN", name:"Denver", lat:39.8561, lon:-104.6737},
+  {code:"NYC", name:"New York City", lat:40.7828, lon:-73.9653},
+  {code:"PHI", name:"Philadelphia", lat:39.8719, lon:-75.2411},
+  {code:"CHI", name:"Chicago", lat:41.7868, lon:-87.7522},
+  {code:"LA", name:"Los Angeles", lat:33.9425, lon:-118.4081},
+  {code:"MIA", name:"Miami", lat:25.7959, lon:-80.2870},
+  {code:"SF", name:"San Francisco", lat:37.6213, lon:-122.3790},
+  {code:"SEA", name:"Seattle", lat:47.4502, lon:-122.3088},
+  {code:"ATL", name:"Atlanta", lat:33.6407, lon:-84.4277},
+  {code:"AUS", name:"Austin", lat:30.1975, lon:-97.6664},
+  {code:"BOS", name:"Boston", lat:42.3656, lon:-71.0096},
+  {code:"DAL", name:"Dallas", lat:32.8471, lon:-96.8518},
+  {code:"DC", name:"Washington DC", lat:38.8512, lon:-77.0402},
+  {code:"HOU", name:"Houston", lat:29.6454, lon:-95.2789},
+  {code:"LV", name:"Las Vegas", lat:36.0801, lon:-115.1522},
+  {code:"MIN", name:"Minneapolis", lat:44.8848, lon:-93.2223},
+  {code:"NOLA", name:"New Orleans", lat:29.9934, lon:-90.2580},
+  {code:"OKC", name:"Oklahoma City", lat:35.3931, lon:-97.6007},
+  {code:"PHX", name:"Phoenix", lat:33.4342, lon:-112.0116},
+  {code:"SATX", name:"San Antonio", lat:29.5337, lon:-98.4698}
+];
+
+let rows = CITIES.map(c => ({...c, temp: null, time: "", error: ""}));
+
+function urlFor(c) {
+  return `https://api.open-meteo.com/v1/forecast?latitude=${c.lat}&longitude=${c.lon}&current=temperature_2m&temperature_unit=fahrenheit&timezone=auto`;
+}
+
+function fmtTemp(t) {
+  return (t === null || t === undefined || Number.isNaN(t)) ? "—" : `${Math.round(t)}°`;
+}
+
+function renderCards() {
+  const mode = document.getElementById("sortMode").value;
+  let sorted = [...rows];
+
+  if (mode === "temp_desc") sorted.sort((a,b) => (b.temp ?? -999) - (a.temp ?? -999));
+  if (mode === "temp_asc") sorted.sort((a,b) => (a.temp ?? 999) - (b.temp ?? 999));
+  if (mode === "code") sorted.sort((a,b) => a.code.localeCompare(b.code));
+
+  document.getElementById("grid").innerHTML = sorted.map(r => `
+    <div class="card">
+      <div class="code">${r.code}</div>
+      <div class="name">${r.name}</div>
+      <div class="temp">${fmtTemp(r.temp)}</div>
+      <div class="time">${r.time ? "Obs/API time: " + r.time : ""}</div>
+      ${r.error ? `<div class="error">${r.error}</div>` : ""}
+      <a href="${urlFor(r)}" target="_blank" rel="noopener">Open raw Open-Meteo data</a>
+    </div>
+  `).join("");
+}
+
+async function fetchCity(c) {
+  const res = await fetch(urlFor(c), {cache: "no-store"});
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return {
+    ...c,
+    temp: data?.current?.temperature_2m ?? null,
+    time: data?.current?.time ?? "",
+    error: ""
+  };
+}
+
+async function loadTemps(manual=false) {
+  const status = document.getElementById("status");
+  status.textContent = manual ? "Refreshing..." : "Loading...";
+  renderCards();
+
+  const results = await Promise.all(CITIES.map(async c => {
+    try {
+      return await fetchCity(c);
+    } catch (e) {
+      return {...c, temp: null, time: "", error: String(e.message || e)};
+    }
+  }));
+
+  rows = results;
+  renderCards();
+
+  const now = new Date();
+  status.textContent = `Last refresh: ${now.toLocaleTimeString()} · Next auto-refresh in 60 min`;
+}
+
+loadTemps();
+setInterval(() => loadTemps(false), 60 * 60 * 1000);
+</script>
+</body>
+</html>
+"""
+
+@app.get("/current-temps", response_class=HTMLResponse)
+async def current_temps_dashboard():
+    return HTMLResponse(CURRENT_TEMPS_DASHBOARD_HTML)
+

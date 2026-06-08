@@ -145,15 +145,17 @@ async def fetch_ensemble_forecast(city_key: str, target_date: Optional[date] = N
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            # Open-Meteo Ensemble API — GFS ensemble with 31 members
+            # Open-Meteo Ensemble API — lighter GEFS hourly request.
+            # This matches the working bot style: fetch hourly temperature_2m,
+            # then derive high/low from the hourly forecast.
             params = {
                 "latitude": city["lat"],
                 "longitude": city["lon"],
-                "daily": "temperature_2m_max,temperature_2m_min",
-                "temperature_unit": "fahrenheit",
-                "start_date": target_date.isoformat(),
-                "end_date": target_date.isoformat(),
+                "hourly": "temperature_2m",
                 "models": "gfs_seamless",
+                "forecast_days": 2,
+                "temperature_unit": "fahrenheit",
+                "timezone": "UTC",
             }
 
             response = await client.get(
@@ -163,24 +165,16 @@ async def fetch_ensemble_forecast(city_key: str, target_date: Optional[date] = N
             response.raise_for_status()
             data = response.json()
 
-            daily = data.get("daily", {})
+            hourly = data.get("hourly", {})
+            temps = hourly.get("temperature_2m", [])
+            temps = [float(t) for t in temps if t is not None]
 
-            # Open-Meteo returns each ensemble member as a separate key:
-            #   temperature_2m_max (control), temperature_2m_max_member01, ..., _member30
-            # Collect all member values for highs and lows
             member_highs = []
             member_lows = []
 
-            for key, values in daily.items():
-                if not isinstance(values, list) or not values:
-                    continue
-                val = values[0]
-                if val is None:
-                    continue
-                if "temperature_2m_max" in key:
-                    member_highs.append(float(val))
-                elif "temperature_2m_min" in key:
-                    member_lows.append(float(val))
+            if temps:
+                member_highs.append(max(temps))
+                member_lows.append(min(temps))
 
             if not member_highs:
                 logger.warning(f"No ensemble data for {city_key} on {target_date}")
@@ -197,7 +191,7 @@ async def fetch_ensemble_forecast(city_key: str, target_date: Optional[date] = N
             _forecast_cache[cache_key] = (now, forecast)
             logger.info(f"Ensemble forecast for {city['name']} on {target_date}: "
                         f"High {forecast.mean_high:.1f}F +/- {forecast.std_high:.1f}F "
-                        f"({forecast.num_members} members)")
+                        f"({forecast.num_members} GEFS-derived sample(s))")
 
             return forecast
 

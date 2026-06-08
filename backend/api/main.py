@@ -2074,3 +2074,495 @@ async def kalshi_series_discovery():
 
     return output
 
+ACTIVE_KALSHI_TEMP_SERIES = {
+    "atl": {"name": "Atlanta", "station": "KATL", "tz": "America/New_York", "high": "KXHIGHTATL", "low": "KXLOWTATL"},
+    "aus": {"name": "Austin", "station": "KAUS", "tz": "America/Chicago", "high": "KXHIGHAUS", "low": "KXLOWTAUS"},
+    "bos": {"name": "Boston", "station": "KBOS", "tz": "America/New_York", "high": "KXHIGHTBOS", "low": "KXLOWTBOS"},
+    "chicago": {"name": "Chicago", "station": "KMDW", "tz": "America/Chicago", "high": "KXHIGHCHI", "low": "KXLOWTCHI"},
+    "dal": {"name": "Dallas", "station": "KDAL", "tz": "America/Chicago", "high": "KXHIGHTDAL", "low": "KXLOWTDAL"},
+    "dc": {"name": "Washington DC", "station": "KDCA", "tz": "America/New_York", "high": "KXHIGHTDC", "low": "KXLOWTDC"},
+    "denver": {"name": "Denver", "station": "KDEN", "tz": "America/Denver", "high": "KXHIGHDEN", "low": "KXLOWTDEN"},
+    "hou": {"name": "Houston", "station": "KHOU", "tz": "America/Chicago", "high": "KXHIGHTHOU", "low": "KXLOWTHOU"},
+    "los_angeles": {"name": "Los Angeles", "station": "KLAX", "tz": "America/Los_Angeles", "high": "KXHIGHLAX", "low": "KXLOWTLAX"},
+    "lv": {"name": "Las Vegas", "station": "KLAS", "tz": "America/Los_Angeles", "high": "KXHIGHTLV", "low": "KXLOWTLV"},
+    "miami": {"name": "Miami", "station": "KMIA", "tz": "America/New_York", "high": "KXHIGHMIA", "low": "KXLOWTMIA"},
+    "min": {"name": "Minneapolis", "station": "KMSP", "tz": "America/Chicago", "high": "KXHIGHTMIN", "low": "KXLOWTMIN"},
+    "nola": {"name": "New Orleans", "station": "KMSY", "tz": "America/Chicago", "high": "KXHIGHTNOLA", "low": "KXLOWTNOLA"},
+    "nyc": {"name": "New York City", "station": "KNYC", "tz": "America/New_York", "high": "KXHIGHNY", "low": "KXLOWTNYC"},
+    "okc": {"name": "Oklahoma City", "station": "KOKC", "tz": "America/Chicago", "high": "KXHIGHTOKC", "low": "KXLOWTOKC"},
+    "phi": {"name": "Philadelphia", "station": "KPHL", "tz": "America/New_York", "high": "KXHIGHPHIL", "low": "KXLOWTPHIL"},
+    "phx": {"name": "Phoenix", "station": "KPHX", "tz": "America/Phoenix", "high": "KXHIGHTPHX", "low": "KXLOWTPHX"},
+    "satx": {"name": "San Antonio", "station": "KSAT", "tz": "America/Chicago", "high": "KXHIGHTSATX", "low": "KXLOWTSATX"},
+    "sea": {"name": "Seattle", "station": "KSEA", "tz": "America/Los_Angeles", "high": "KXHIGHTSEA", "low": "KXLOWTSEA"},
+    "sf": {"name": "San Francisco", "station": "KSFO", "tz": "America/Los_Angeles", "high": "KXHIGHTSFO", "low": "KXLOWTSFO"},
+}
+
+
+def _market_price_score(m: dict) -> float:
+    yes_bid = m.get("yes_bid")
+    yes_ask = m.get("yes_ask")
+    last_price = m.get("last_price")
+
+    if yes_bid is not None and yes_ask is not None and yes_bid > 0 and yes_ask > 0:
+        return float(yes_bid + yes_ask) / 2.0
+    if yes_bid is not None and yes_bid > 0:
+        return float(yes_bid)
+    if last_price is not None and last_price > 0:
+        return float(last_price)
+    if yes_ask is not None and yes_ask > 0:
+        return float(yes_ask)
+    return 0.0
+
+
+def _parse_temp_bucket(title: str, ticker: str) -> dict:
+    import re
+
+    clean_title = (title or ticker or "").replace("**", "")
+
+    range_match = re.search(r"be\s+(\d+)\s*-\s*(\d+)", clean_title)
+    if range_match:
+        lo = int(range_match.group(1))
+        hi = int(range_match.group(2))
+        return {
+            "bucket_type": "range",
+            "label": f"{lo}-{hi}°",
+            "low": lo,
+            "high": hi,
+            "threshold": None,
+            "center": (lo + hi) / 2.0,
+        }
+
+    above_match = re.search(r"be\s*>\s*(\d+)", clean_title)
+    if above_match:
+        threshold = int(above_match.group(1))
+        return {
+            "bucket_type": "above",
+            "label": f">{threshold}°",
+            "low": threshold + 1,
+            "high": None,
+            "threshold": threshold,
+            "center": threshold + 1.0,
+        }
+
+    below_match = re.search(r"be\s*<\s*(\d+)", clean_title)
+    if below_match:
+        threshold = int(below_match.group(1))
+        return {
+            "bucket_type": "below",
+            "label": f"<{threshold}°",
+            "low": None,
+            "high": threshold - 1,
+            "threshold": threshold,
+            "center": threshold - 1.0,
+        }
+
+    # Fallback for Bxx.5 bracket tickers. Example B82.5 = 82-83.
+    ticker_match = re.search(r"-B(\d+)\.5$", ticker or "")
+    if ticker_match:
+        lo = int(ticker_match.group(1))
+        hi = lo + 1
+        return {
+            "bucket_type": "range",
+            "label": f"{lo}-{hi}°",
+            "low": lo,
+            "high": hi,
+            "threshold": None,
+            "center": (lo + hi) / 2.0,
+        }
+
+    return {
+        "bucket_type": "unknown",
+        "label": clean_title or ticker,
+        "low": None,
+        "high": None,
+        "threshold": None,
+        "center": None,
+    }
+
+
+async def _fetch_kalshi_series_markets(client, series: str) -> list:
+    markets = []
+    cursor = None
+
+    while True:
+        params = {
+            "series_ticker": series,
+            "status": "open",
+            "limit": 200,
+        }
+        if cursor:
+            params["cursor"] = cursor
+
+        data = await client.get_markets(params)
+        raw_markets = data.get("markets", []) or []
+        markets.extend(raw_markets)
+
+        cursor = data.get("cursor")
+        if not cursor or not raw_markets:
+            break
+
+    return markets
+
+
+@app.get("/api/kalshi/market-board")
+async def kalshi_market_board():
+    from datetime import datetime, timezone
+    from backend.data.kalshi_client import KalshiClient, kalshi_credentials_present
+
+    if not kalshi_credentials_present():
+        return {
+            "ok": False,
+            "error": "Kalshi credentials are not configured on this service.",
+            "cities": [],
+        }
+
+    client = KalshiClient()
+    cities_out = []
+
+    for city_key, cfg in ACTIVE_KALSHI_TEMP_SERIES.items():
+        city_out = {
+            "city_key": city_key,
+            "name": cfg["name"],
+            "station": cfg["station"],
+            "tz": cfg["tz"],
+            "markets": {
+                "high": {"series": cfg["high"], "buckets": [], "error": None},
+                "low": {"series": cfg["low"], "buckets": [], "error": None},
+            },
+        }
+
+        for market_type in ("high", "low"):
+            series = cfg[market_type]
+            try:
+                raw = await _fetch_kalshi_series_markets(client, series)
+                buckets = []
+
+                for m in raw:
+                    ticker = m.get("ticker") or ""
+                    title = m.get("title") or ticker
+                    bucket = _parse_temp_bucket(title, ticker)
+                    score = _market_price_score(m)
+
+                    buckets.append({
+                        "ticker": ticker,
+                        "title": title,
+                        "label": bucket["label"],
+                        "bucket_type": bucket["bucket_type"],
+                        "low": bucket["low"],
+                        "high": bucket["high"],
+                        "threshold": bucket["threshold"],
+                        "center": bucket["center"],
+                        "yes_bid": m.get("yes_bid"),
+                        "yes_ask": m.get("yes_ask"),
+                        "no_bid": m.get("no_bid"),
+                        "no_ask": m.get("no_ask"),
+                        "last_price": m.get("last_price"),
+                        "volume": m.get("volume") or 0,
+                        "open_interest": m.get("open_interest") or 0,
+                        "score": score,
+                    })
+
+                buckets.sort(key=lambda x: x["score"], reverse=True)
+                city_out["markets"][market_type]["buckets"] = buckets
+
+            except Exception as e:
+                city_out["markets"][market_type]["error"] = str(e)
+
+        cities_out.append(city_out)
+
+    return {
+        "ok": True,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "cities": cities_out,
+    }
+
+
+MARKET_BOARD_DASHBOARD_HTML = r"""
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Kalshi WX Market Board</title>
+  <style>
+    :root {
+      --bg:#0f172a; --card:#111827; --card2:#1f2937; --text:#e5e7eb; --muted:#94a3b8;
+      --border:#334155; --green:#22c55e; --amber:#f59e0b; --blue:#60a5fa; --bad:#ef4444;
+    }
+    body { margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:var(--bg); color:var(--text); }
+    header { padding:18px 16px 12px; border-bottom:1px solid var(--border); position:sticky; top:0; background:rgba(15,23,42,.96); z-index:10; }
+    h1 { margin:0; font-size:22px; }
+    .sub { color:var(--muted); font-size:13px; margin-top:5px; line-height:1.35; }
+    .controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:12px; }
+    button, select { background:var(--card2); color:var(--text); border:1px solid var(--border); border-radius:10px; padding:9px 12px; font-size:14px; }
+    button.active { border-color:var(--amber); color:#fde68a; }
+    main { padding:14px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:14px; box-shadow:0 10px 20px rgba(0,0,0,.18); }
+    .cityline { display:flex; justify-content:space-between; gap:8px; align-items:flex-start; }
+    .code { color:var(--muted); font-size:13px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; }
+    .name { font-size:17px; font-weight:800; margin-top:2px; }
+    .station { color:var(--muted); font-size:12px; margin-top:2px; }
+    .badge { display:inline-block; padding:4px 8px; border-radius:999px; border:1px solid var(--border); font-size:11px; font-weight:800; white-space:nowrap; }
+    .agree { color:#86efac; background:rgba(34,197,94,.12); border-color:rgba(34,197,94,.35); }
+    .hot { color:#fcd34d; background:rgba(245,158,11,.12); border-color:rgba(245,158,11,.35); }
+    .cold { color:#93c5fd; background:rgba(96,165,250,.12); border-color:rgba(96,165,250,.35); }
+    .unknown { color:var(--muted); background:rgba(148,163,184,.1); border-color:rgba(148,163,184,.25); }
+    .obsbox { border-top:1px solid var(--border); border-bottom:1px solid var(--border); margin-top:12px; padding:10px 0; display:grid; gap:5px; }
+    .row { display:flex; justify-content:space-between; gap:8px; color:var(--muted); font-size:13px; }
+    .row strong { color:var(--text); }
+    .leaders { display:grid; gap:8px; margin-top:12px; }
+    .leaderbox { background:rgba(31,41,55,.7); border:1px solid var(--border); border-radius:12px; padding:10px; }
+    .leader-title { color:var(--muted); font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
+    .leader-main { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:4px; font-size:16px; font-weight:900; }
+    .price { color:#86efac; }
+    .meta { color:var(--muted); font-size:12px; margin-top:4px; }
+    .buckets { display:grid; gap:6px; margin-top:12px; }
+    .bucket { display:grid; grid-template-columns:70px 1fr auto; gap:8px; align-items:center; padding:8px; border-radius:10px; background:#0b1220; border:1px solid rgba(51,65,85,.55); font-size:12px; }
+    .bucket.lead { border-color:rgba(34,197,94,.55); background:rgba(34,197,94,.08); }
+    .bucket.obs { outline:1px solid rgba(96,165,250,.65); }
+    .muted { color:var(--muted); }
+    .error { color:var(--bad); font-size:12px; margin-top:8px; }
+    a { color:#93c5fd; text-decoration:none; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Kalshi WX Market Board</h1>
+  <div class="sub">
+    Market leader is ranked by current Kalshi YES midpoint/price. Observed leader uses public NWS station observations and local city time.
+  </div>
+  <div class="controls">
+    <button id="highBtn" class="active" onclick="setType('high')">HIGH Markets</button>
+    <button id="lowBtn" onclick="setType('low')">LOW Markets</button>
+    <button onclick="loadBoard(true)">Refresh now</button>
+    <select id="sortMode" onchange="render()">
+      <option value="default">Sort: Default</option>
+      <option value="leader">Sort: Highest leader price</option>
+      <option value="agree">Sort: Agreement first</option>
+      <option value="city">Sort: City</option>
+    </select>
+    <span class="sub" id="status">Loading...</span>
+  </div>
+</header>
+<main>
+  <div class="grid" id="grid"></div>
+</main>
+
+<script>
+let board = [];
+let marketType = "high";
+
+function fmtTemp(v) {
+  return (v === null || v === undefined || Number.isNaN(v)) ? "—" : `${Math.round(v)}°`;
+}
+function cents(v) {
+  return (v === null || v === undefined || Number.isNaN(v)) ? "—" : `${Math.round(v)}¢`;
+}
+function fmtNum(v) {
+  return (v === null || v === undefined) ? "—" : Number(v).toLocaleString();
+}
+function obsUrl(c) {
+  const end = new Date();
+  const start = new Date(end.getTime() - 36 * 60 * 60 * 1000);
+  return `https://api.weather.gov/stations/${c.station}/observations?start=${start.toISOString()}&end=${end.toISOString()}`;
+}
+function cToF(c) { return c * 9 / 5 + 32; }
+function localYmd(iso, tz) {
+  const parts = new Intl.DateTimeFormat("en-US", {timeZone:tz, year:"numeric", month:"2-digit", day:"2-digit"}).formatToParts(new Date(iso));
+  const y = parts.find(p => p.type === "year")?.value;
+  const m = parts.find(p => p.type === "month")?.value;
+  const d = parts.find(p => p.type === "day")?.value;
+  return `${y}-${m}-${d}`;
+}
+function localTime(iso, tz) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleString(undefined, {timeZone:tz, month:"numeric", day:"numeric", hour:"numeric", minute:"2-digit"});
+}
+function parseObs(c, data) {
+  const features = data?.features || [];
+  const today = localYmd(new Date().toISOString(), c.tz);
+  const obs = [];
+
+  for (const f of features) {
+    const p = f.properties || {};
+    const iso = p.timestamp;
+    const tc = p.temperature?.value;
+    if (!iso || tc === null || tc === undefined) continue;
+    obs.push({time: iso, temp: cToF(Number(tc)), day: localYmd(iso, c.tz)});
+  }
+
+  obs.sort((a,b) => new Date(b.time) - new Date(a.time));
+  const todayObs = obs.filter(o => o.day === today);
+
+  let high = null, low = null;
+  for (const o of todayObs) {
+    if (!high || o.temp > high.temp) high = o;
+    if (!low || o.temp < low.temp) low = o;
+  }
+
+  return {
+    obsTemp: obs[0]?.temp ?? null,
+    obsTime: obs[0]?.time ?? "",
+    obsHigh: high?.temp ?? null,
+    obsHighTime: high?.time ?? "",
+    obsLow: low?.temp ?? null,
+    obsLowTime: low?.time ?? "",
+  };
+}
+
+function bucketMatchesValue(b, value) {
+  if (value === null || value === undefined) return false;
+  const rounded = Math.round(value);
+  if (b.bucket_type === "range") return rounded >= b.low && rounded <= b.high;
+  if (b.bucket_type === "above") return rounded > b.threshold;
+  if (b.bucket_type === "below") return rounded < b.threshold;
+  return false;
+}
+function bucketCenter(b) {
+  if (b.center !== null && b.center !== undefined) return b.center;
+  if (b.low !== null && b.high !== null) return (b.low + b.high) / 2;
+  if (b.low !== null) return b.low;
+  if (b.high !== null) return b.high;
+  return null;
+}
+function statusFor(leader, observed) {
+  if (!leader || !observed) return {text:"No obs match yet", cls:"unknown"};
+  if (leader.ticker === observed.ticker) return {text:"Market agrees with observed", cls:"agree"};
+
+  const lc = bucketCenter(leader);
+  const oc = bucketCenter(observed);
+  if (lc === null || oc === null) return {text:"Market/obs mismatch", cls:"unknown"};
+
+  if (lc > oc) return {text:"Market pricing higher than observed", cls:"hot"};
+  if (lc < oc) return {text:"Market pricing lower than observed", cls:"cold"};
+  return {text:"Market/obs near same boundary", cls:"unknown"};
+}
+function marketLeader(buckets) {
+  return (buckets || [])[0] || null;
+}
+function contender(buckets) {
+  return (buckets || [])[1] || null;
+}
+function observedLeader(c, buckets) {
+  const value = marketType === "high" ? c.obs?.obsHigh : c.obs?.obsLow;
+  return (buckets || []).find(b => bucketMatchesValue(b, value)) || null;
+}
+
+function setType(t) {
+  marketType = t;
+  document.getElementById("highBtn").classList.toggle("active", t === "high");
+  document.getElementById("lowBtn").classList.toggle("active", t === "low");
+  render();
+}
+
+function render() {
+  const mode = document.getElementById("sortMode").value;
+  let rows = [...board];
+
+  if (mode === "city") rows.sort((a,b) => a.name.localeCompare(b.name));
+  if (mode === "leader") rows.sort((a,b) => ((marketLeader(b.markets[marketType].buckets)?.score) ?? 0) - ((marketLeader(a.markets[marketType].buckets)?.score) ?? 0));
+  if (mode === "agree") rows.sort((a,b) => {
+    const ab = a.markets[marketType].buckets, bb = b.markets[marketType].buckets;
+    const as = statusFor(marketLeader(ab), observedLeader(a, ab)).cls === "agree" ? 0 : 1;
+    const bs = statusFor(marketLeader(bb), observedLeader(b, bb)).cls === "agree" ? 0 : 1;
+    return as - bs;
+  });
+
+  document.getElementById("grid").innerHTML = rows.map(c => {
+    const m = c.markets[marketType];
+    const buckets = m.buckets || [];
+    const lead = marketLeader(buckets);
+    const cont = contender(buckets);
+    const obsLead = observedLeader(c, buckets);
+    const st = statusFor(lead, obsLead);
+    const obsValue = marketType === "high" ? c.obs?.obsHigh : c.obs?.obsLow;
+    const obsTime = marketType === "high" ? c.obs?.obsHighTime : c.obs?.obsLowTime;
+    const label = marketType.toUpperCase();
+
+    return `
+      <div class="card">
+        <div class="cityline">
+          <div>
+            <div class="code">${label} · ${c.city_key}</div>
+            <div class="name">${c.name}</div>
+            <div class="station">${c.station} · ${m.series}</div>
+          </div>
+          <span class="badge ${st.cls}">${st.text}</span>
+        </div>
+
+        <div class="obsbox">
+          <div class="row"><span>Last observed</span><strong>${fmtTemp(c.obs?.obsTemp)}</strong></div>
+          <div class="row"><span>Observed ${label} so far</span><strong>${fmtTemp(obsValue)}</strong></div>
+          <div class="row"><span>Observed leader</span><strong>${obsLead ? obsLead.label : "—"}</strong></div>
+          <div class="muted" style="font-size:12px;">${obsTime ? "Time: " + localTime(obsTime, c.tz) : ""}</div>
+        </div>
+
+        <div class="leaders">
+          <div class="leaderbox">
+            <div class="leader-title">Market Leader</div>
+            <div class="leader-main"><span>${lead ? lead.label : "—"}</span><span class="price">${lead ? cents(lead.score) : "—"}</span></div>
+            <div class="meta">${lead ? `YES ${cents(lead.yes_bid)} / ${cents(lead.yes_ask)} · NO ${cents(lead.no_bid)} / ${cents(lead.no_ask)} · Vol ${fmtNum(lead.volume)}` : ""}</div>
+          </div>
+          <div class="leaderbox">
+            <div class="leader-title">Next Contender</div>
+            <div class="leader-main"><span>${cont ? cont.label : "—"}</span><span class="price">${cont ? cents(cont.score) : "—"}</span></div>
+            <div class="meta">${cont ? `YES ${cents(cont.yes_bid)} / ${cents(cont.yes_ask)} · NO ${cents(cont.no_bid)} / ${cents(cont.no_ask)} · Vol ${fmtNum(cont.volume)}` : ""}</div>
+          </div>
+        </div>
+
+        ${m.error ? `<div class="error">${m.error}</div>` : ""}
+
+        <div class="buckets">
+          ${buckets.map((b, idx) => `
+            <div class="bucket ${idx === 0 ? "lead" : ""} ${obsLead && obsLead.ticker === b.ticker ? "obs" : ""}">
+              <strong>${b.label}</strong>
+              <span class="muted">YES ${cents(b.yes_bid)} / ${cents(b.yes_ask)} · Vol ${fmtNum(b.volume)}</span>
+              <span class="price">${cents(b.score)}</span>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+async function loadBoard(manual=false) {
+  const status = document.getElementById("status");
+  status.textContent = manual ? "Refreshing..." : "Loading...";
+
+  const res = await fetch("/api/kalshi/market-board", {cache:"no-store"});
+  const data = await res.json();
+  if (!data.ok) {
+    status.textContent = data.error || "Failed to load market board";
+    return;
+  }
+
+  const rows = await Promise.all((data.cities || []).map(async c => {
+    try {
+      const obsRes = await fetch(obsUrl(c), {cache:"no-store"});
+      if (obsRes.ok) {
+        const obsData = await obsRes.json();
+        return {...c, obs: parseObs(c, obsData)};
+      }
+    } catch {}
+    return {...c, obs: {}};
+  }));
+
+  board = rows;
+  render();
+  status.textContent = `Last refresh: ${new Date().toLocaleTimeString()} · ${rows.length} cities`;
+}
+
+loadBoard();
+setInterval(() => loadBoard(false), 5 * 60 * 1000);
+</script>
+</body>
+</html>
+"""
+
+
+@app.get("/market-board", response_class=HTMLResponse)
+async def market_board_dashboard():
+    return HTMLResponse(MARKET_BOARD_DASHBOARD_HTML)
+

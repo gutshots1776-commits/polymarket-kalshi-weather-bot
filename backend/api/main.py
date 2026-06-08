@@ -1291,3 +1291,382 @@ setInterval(() => loadTemps(false), 60 * 60 * 1000);
 async def current_temps_dashboard():
     return HTMLResponse(CURRENT_TEMPS_DASHBOARD_HTML)
 
+ENSEMBLE_TEMPS_DASHBOARD_HTML = r"""
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Kalshi WX Ensemble Temps</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #111827;
+      --card2: #1f2937;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --border: #334155;
+      --bad: #ef4444;
+    }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    header {
+      padding: 18px 16px 10px;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(8px);
+      z-index: 10;
+    }
+    h1 { margin: 0; font-size: 22px; }
+    .sub {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 4px;
+      line-height: 1.35;
+    }
+    .controls {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    button, select {
+      background: var(--card2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 12px;
+      font-size: 14px;
+    }
+    button { cursor: pointer; }
+    main { padding: 14px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 12px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+      box-shadow: 0 10px 20px rgba(0,0,0,.18);
+    }
+    .code {
+      font-size: 13px;
+      color: var(--muted);
+      letter-spacing: .06em;
+      font-weight: 700;
+    }
+    .name { font-size: 15px; margin-top: 2px; }
+    .temp {
+      font-size: 34px;
+      font-weight: 800;
+      margin-top: 10px;
+    }
+    .label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: -4px;
+    }
+    .forecast-block {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .forecast-row {
+      border-top: 1px solid var(--border);
+      padding-top: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .forecast-row strong {
+      color: var(--text);
+      font-size: 13px;
+      display: block;
+      margin-top: 2px;
+    }
+    .spread {
+      color: var(--muted);
+      font-size: 11px;
+      margin-top: 2px;
+    }
+    .time {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 10px;
+      min-height: 16px;
+    }
+    .error {
+      color: var(--bad);
+      font-size: 12px;
+      margin-top: 8px;
+    }
+    a {
+      color: #93c5fd;
+      font-size: 12px;
+      text-decoration: none;
+      display: inline-block;
+      margin-top: 10px;
+    }
+    .footer {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 14px;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Kalshi WX Ensemble Temps</h1>
+  <div class="sub">
+    GFS/GEFS ensemble forecast from Open-Meteo for the 20-city Kalshi watchlist.
+    This uses your browser to fetch the data, not Render’s server.
+  </div>
+  <div class="controls">
+    <button onclick="loadTemps(true)">Refresh now</button>
+    <select id="sortMode" onchange="renderCards()">
+      <option value="default">Sort: Default</option>
+      <option value="now_desc">Sort: Warmest now</option>
+      <option value="now_asc">Sort: Coldest now</option>
+      <option value="today_high_desc">Sort: Highest today</option>
+      <option value="code">Sort: City code</option>
+    </select>
+    <span class="sub" id="status">Loading...</span>
+  </div>
+</header>
+
+<main>
+  <div class="grid" id="grid"></div>
+  <div class="footer">
+    Auto-refreshes every 60 minutes while open. This is model/grid forecast data, not official ASOS/METAR/DSM/CLI settlement data.
+  </div>
+</main>
+
+<script>
+const CITIES = [
+  {code:"DEN", name:"Denver", lat:39.8561, lon:-104.6737},
+  {code:"NYC", name:"New York City", lat:40.7828, lon:-73.9653},
+  {code:"PHI", name:"Philadelphia", lat:39.8719, lon:-75.2411},
+  {code:"CHI", name:"Chicago", lat:41.7868, lon:-87.7522},
+  {code:"LA", name:"Los Angeles", lat:33.9425, lon:-118.4081},
+  {code:"MIA", name:"Miami", lat:25.7959, lon:-80.2870},
+  {code:"SF", name:"San Francisco", lat:37.6213, lon:-122.3790},
+  {code:"SEA", name:"Seattle", lat:47.4502, lon:-122.3088},
+  {code:"ATL", name:"Atlanta", lat:33.6407, lon:-84.4277},
+  {code:"AUS", name:"Austin", lat:30.1975, lon:-97.6664},
+  {code:"BOS", name:"Boston", lat:42.3656, lon:-71.0096},
+  {code:"DAL", name:"Dallas", lat:32.8471, lon:-96.8518},
+  {code:"DC", name:"Washington DC", lat:38.8512, lon:-77.0402},
+  {code:"HOU", name:"Houston", lat:29.6454, lon:-95.2789},
+  {code:"LV", name:"Las Vegas", lat:36.0801, lon:-115.1522},
+  {code:"MIN", name:"Minneapolis", lat:44.8848, lon:-93.2223},
+  {code:"NOLA", name:"New Orleans", lat:29.9934, lon:-90.2580},
+  {code:"OKC", name:"Oklahoma City", lat:35.3931, lon:-97.6007},
+  {code:"PHX", name:"Phoenix", lat:33.4342, lon:-112.0116},
+  {code:"SATX", name:"San Antonio", lat:29.5337, lon:-98.4698}
+];
+
+let rows = CITIES.map(c => ({...c, now: null, currentTime: "", days: [], n: 0, error: ""}));
+
+function ensembleUrl(c) {
+  return `https://ensemble-api.open-meteo.com/v1/ensemble?latitude=${c.lat}&longitude=${c.lon}&hourly=temperature_2m&models=gfs_seamless&forecast_days=3&temperature_unit=fahrenheit&timezone=auto`;
+}
+
+function fmtTemp(t) {
+  return (t === null || t === undefined || Number.isNaN(t)) ? "—" : `${Math.round(t)}°`;
+}
+
+function mean(vals) {
+  if (!vals.length) return null;
+  return vals.reduce((a,b) => a+b, 0) / vals.length;
+}
+
+function percentile(vals, p) {
+  if (!vals.length) return null;
+  const sorted = [...vals].sort((a,b) => a-b);
+  const idx = (sorted.length - 1) * p;
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo];
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+}
+
+function dayLabel(isoDate, idx) {
+  if (idx === 0) return "Today";
+  if (idx === 1) return "Tomorrow";
+  try {
+    return new Date(isoDate + "T12:00:00").toLocaleDateString(undefined, {
+      weekday: "short",
+      month: "numeric",
+      day: "numeric"
+    });
+  } catch {
+    return `Day ${idx + 1}`;
+  }
+}
+
+function tempKeys(hourly) {
+  return Object.keys(hourly || {}).filter(k => k === "temperature_2m" || k.startsWith("temperature_2m_member"));
+}
+
+function nearestIndex(times) {
+  if (!times || !times.length) return 0;
+  const now = Date.now();
+  let best = 0;
+  let bestDiff = Infinity;
+  times.forEach((t, i) => {
+    const diff = Math.abs(new Date(t).getTime() - now);
+    if (diff < bestDiff) {
+      best = i;
+      bestDiff = diff;
+    }
+  });
+  return best;
+}
+
+function parseEnsemble(c, data) {
+  const hourly = data.hourly || {};
+  const times = hourly.time || [];
+  const keys = tempKeys(hourly);
+
+  if (!times.length || !keys.length) {
+    throw new Error("No ensemble hourly temps returned");
+  }
+
+  const ni = nearestIndex(times);
+  const nowVals = keys.map(k => hourly[k]?.[ni]).filter(v => v !== null && v !== undefined).map(Number);
+  const nowMean = mean(nowVals);
+
+  const grouped = {};
+  times.forEach((t, i) => {
+    const d = String(t).slice(0, 10);
+    if (!grouped[d]) grouped[d] = {};
+    keys.forEach(k => {
+      const v = hourly[k]?.[i];
+      if (v === null || v === undefined) return;
+      if (!grouped[d][k]) grouped[d][k] = [];
+      grouped[d][k].push(Number(v));
+    });
+  });
+
+  const days = Object.keys(grouped).slice(0, 3).map((date, idx) => {
+    const highs = [];
+    const lows = [];
+
+    for (const k of keys) {
+      const vals = grouped[date][k] || [];
+      if (!vals.length) continue;
+      highs.push(Math.max(...vals));
+      lows.push(Math.min(...vals));
+    }
+
+    return {
+      date,
+      label: dayLabel(date, idx),
+      highMean: mean(highs),
+      lowMean: mean(lows),
+      highP10: percentile(highs, 0.10),
+      highP50: percentile(highs, 0.50),
+      highP90: percentile(highs, 0.90),
+      lowP10: percentile(lows, 0.10),
+      lowP50: percentile(lows, 0.50),
+      lowP90: percentile(lows, 0.90),
+      n: highs.length
+    };
+  });
+
+  return {
+    ...c,
+    now: nowMean,
+    currentTime: times[ni] || "",
+    days,
+    n: keys.length,
+    error: ""
+  };
+}
+
+function renderCards() {
+  const mode = document.getElementById("sortMode").value;
+  let sorted = [...rows];
+
+  if (mode === "now_desc") sorted.sort((a,b) => (b.now ?? -999) - (a.now ?? -999));
+  if (mode === "now_asc") sorted.sort((a,b) => (a.now ?? 999) - (b.now ?? 999));
+  if (mode === "today_high_desc") sorted.sort((a,b) => ((b.days?.[0]?.highMean) ?? -999) - ((a.days?.[0]?.highMean) ?? -999));
+  if (mode === "code") sorted.sort((a,b) => a.code.localeCompare(b.code));
+
+  document.getElementById("grid").innerHTML = sorted.map(r => `
+    <div class="card">
+      <div class="code">${r.code}</div>
+      <div class="name">${r.name}</div>
+      <div class="temp">${fmtTemp(r.now)}</div>
+      <div class="label">Model now · N=${r.n || "—"}</div>
+
+      <div class="forecast-block">
+        ${(r.days || []).map(d => `
+          <div class="forecast-row">
+            ${d.label}
+            <strong>H ${fmtTemp(d.highMean)} / L ${fmtTemp(d.lowMean)}</strong>
+            <div class="spread">
+              High P10/P50/P90: ${fmtTemp(d.highP10)} / ${fmtTemp(d.highP50)} / ${fmtTemp(d.highP90)}
+            </div>
+            <div class="spread">
+              Low P10/P50/P90: ${fmtTemp(d.lowP10)} / ${fmtTemp(d.lowP50)} / ${fmtTemp(d.lowP90)}
+            </div>
+          </div>
+        `).join("")}
+      </div>
+
+      <div class="time">${r.currentTime ? "Nearest model hour: " + r.currentTime : ""}</div>
+      ${r.error ? `<div class="error">${r.error}</div>` : ""}
+      <a href="${ensembleUrl(r)}" target="_blank" rel="noopener">Open raw ensemble data</a>
+    </div>
+  `).join("");
+}
+
+async function fetchCity(c) {
+  const res = await fetch(ensembleUrl(c), {cache: "no-store"});
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return parseEnsemble(c, data);
+}
+
+async function loadTemps(manual=false) {
+  const status = document.getElementById("status");
+  status.textContent = manual ? "Refreshing..." : "Loading...";
+  renderCards();
+
+  const results = await Promise.all(CITIES.map(async c => {
+    try {
+      return await fetchCity(c);
+    } catch (e) {
+      return {...c, now: null, currentTime: "", days: [], n: 0, error: String(e.message || e)};
+    }
+  }));
+
+  rows = results;
+  renderCards();
+
+  const now = new Date();
+  status.textContent = `Last refresh: ${now.toLocaleTimeString()} · Next auto-refresh in 60 min`;
+}
+
+loadTemps();
+setInterval(() => loadTemps(false), 60 * 60 * 1000);
+</script>
+</body>
+</html>
+"""
+
+@app.get("/ensemble-temps", response_class=HTMLResponse)
+async def ensemble_temps_dashboard():
+    return HTMLResponse(ENSEMBLE_TEMPS_DASHBOARD_HTML)
+

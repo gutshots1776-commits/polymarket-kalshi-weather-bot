@@ -2332,6 +2332,34 @@ def _wx_market_prices(m: dict) -> dict:
 def _market_price_score(m: dict) -> float:
     return float(_wx_market_prices(m).get("midpoint") or 0)
 
+
+def _wx_ticker_date_code(ticker: str):
+    """Extract Kalshi date code from ticker like KXLOWTATL-26JUN09-B70.5."""
+    try:
+        import re
+        m = re.search(r"-(\d{2}[A-Z]{3}\d{2})-", ticker or "")
+        return m.group(1) if m else None
+    except Exception:
+        return None
+
+
+def _wx_select_single_market_date(buckets: list) -> list:
+    """
+    Kalshi can return more than one date in the same series.
+    Keep only one date so a city card does not show duplicate buckets.
+    """
+    grouped = {}
+    for b in buckets or []:
+        d = _wx_ticker_date_code(b.get("ticker"))
+        grouped.setdefault(d or "UNKNOWN", []).append(b)
+
+    if not grouped:
+        return buckets or []
+
+    best_date = sorted(grouped.keys(), key=lambda d: (-len(grouped[d]), d))[0]
+    return grouped[best_date]
+
+
 @app.get("/api/kalshi/market-board")
 async def kalshi_market_board():
     from datetime import datetime, timezone
@@ -2425,6 +2453,7 @@ async def kalshi_market_board():
                         "score": px.get("midpoint") or score,
                     })
 
+                buckets = _wx_select_single_market_date(buckets)
                 buckets.sort(key=lambda x: x["score"], reverse=True)
                 city_out["markets"][market_type]["buckets"] = buckets
 

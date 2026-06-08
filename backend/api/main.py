@@ -2283,84 +2283,396 @@ MARKET_BOARD_DASHBOARD_HTML = r"""
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Kalshi WX Market Board</title>
+  <title>NowCast Pro - Kalshi Temperature Board</title>
   <style>
     :root {
-      --bg:#0f172a; --card:#111827; --card2:#1f2937; --text:#e5e7eb; --muted:#94a3b8;
-      --border:#334155; --green:#22c55e; --amber:#f59e0b; --blue:#60a5fa; --bad:#ef4444;
+      --bg:#050b08;
+      --card:#07190c;
+      --text:#e5e7eb;
+      --muted:#7b827f;
+      --green:#22c55e;
+      --amber:#facc15;
+      --blue:#60a5fa;
+      --bad:#ef4444;
+      --border:#1f2b24;
+      --greenBorder:rgba(34,197,94,.35);
     }
-    body { margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:var(--bg); color:var(--text); }
-    header { padding:18px 16px 12px; border-bottom:1px solid var(--border); position:sticky; top:0; background:rgba(15,23,42,.96); z-index:10; }
-    h1 { margin:0; font-size:22px; }
-    .sub { color:var(--muted); font-size:13px; margin-top:5px; line-height:1.35; }
-    .controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:12px; }
-    button, select { background:var(--card2); color:var(--text); border:1px solid var(--border); border-radius:10px; padding:9px 12px; font-size:14px; }
-    button.active { border-color:var(--amber); color:#fde68a; }
-    main { padding:14px; }
-    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; }
-    .card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:14px; box-shadow:0 10px 20px rgba(0,0,0,.18); }
-    .cityline { display:flex; justify-content:space-between; gap:8px; align-items:flex-start; }
-    .code { color:var(--muted); font-size:13px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; }
-    .name { font-size:17px; font-weight:800; margin-top:2px; }
-    .station { color:var(--muted); font-size:12px; margin-top:2px; }
-    .badge { display:inline-block; padding:4px 8px; border-radius:999px; border:1px solid var(--border); font-size:11px; font-weight:800; white-space:nowrap; }
-    .agree { color:#86efac; background:rgba(34,197,94,.12); border-color:rgba(34,197,94,.35); }
-    .hot { color:#fcd34d; background:rgba(245,158,11,.12); border-color:rgba(245,158,11,.35); }
-    .cold { color:#93c5fd; background:rgba(96,165,250,.12); border-color:rgba(96,165,250,.35); }
-    .unknown { color:var(--muted); background:rgba(148,163,184,.1); border-color:rgba(148,163,184,.25); }
-    .obsbox { border-top:1px solid var(--border); border-bottom:1px solid var(--border); margin-top:12px; padding:10px 0; display:grid; gap:5px; }
-    .row { display:flex; justify-content:space-between; gap:8px; color:var(--muted); font-size:13px; }
-    .row strong { color:var(--text); }
-    .leaders { display:grid; gap:8px; margin-top:12px; }
-    .leaderbox { background:rgba(31,41,55,.7); border:1px solid var(--border); border-radius:12px; padding:10px; }
-    .leader-title { color:var(--muted); font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
-    .leader-main { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:4px; font-size:16px; font-weight:900; }
-    .price { color:#86efac; }
-    .meta { color:var(--muted); font-size:12px; margin-top:4px; }
-    .buckets { display:grid; gap:6px; margin-top:12px; }
-    .bucket { display:grid; grid-template-columns:70px 1fr auto; gap:8px; align-items:center; padding:8px; border-radius:10px; background:#0b1220; border:1px solid rgba(51,65,85,.55); font-size:12px; }
-    .bucket.lead { border-color:rgba(34,197,94,.55); background:rgba(34,197,94,.08); }
-    .bucket.obs { outline:1px solid rgba(96,165,250,.65); }
-    .muted { color:var(--muted); }
-    .error { color:var(--bad); font-size:12px; margin-top:8px; }
-    a { color:#93c5fd; text-decoration:none; }
+
+    * { box-sizing:border-box; }
+
+    html, body {
+      width:100%;
+      max-width:100%;
+      overflow-x:hidden;
+    }
+
+    body {
+      margin:0;
+      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:var(--bg);
+      color:var(--text);
+    }
+
+    header {
+      padding:16px 12px 12px;
+      border-bottom:1px solid var(--border);
+      position:sticky;
+      top:0;
+      z-index:20;
+      background:rgba(5,11,8,.97);
+    }
+
+    h1 {
+      margin:0;
+      font-size:21px;
+    }
+
+    .sub {
+      color:var(--muted);
+      font-size:13px;
+      margin-top:5px;
+      line-height:1.35;
+    }
+
+    .controls {
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:9px;
+      margin-top:13px;
+    }
+
+    .controls button, .controls select {
+      background:#0d1110;
+      color:var(--text);
+      border:1px solid #2a302d;
+      border-radius:13px;
+      padding:11px 9px;
+      font-size:13px;
+      font-weight:800;
+      min-width:0;
+    }
+
+    .controls button.active {
+      border-color:rgba(250,204,21,.75);
+      color:#fde68a;
+    }
+
+    .statusline {
+      margin-top:10px;
+      color:var(--muted);
+      font-size:12px;
+    }
+
+    main {
+      padding:10px;
+      width:100%;
+      max-width:100%;
+      overflow-x:hidden;
+    }
+
+    .section-title {
+      color:var(--muted);
+      font-size:13px;
+      font-weight:900;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      margin:10px 4px 14px;
+    }
+
+    .grid {
+      display:grid;
+      grid-template-columns:1fr;
+      gap:14px;
+      width:100%;
+      max-width:100%;
+    }
+
+    .card {
+      background:linear-gradient(180deg, rgba(13,32,17,.98), rgba(5,18,10,.98));
+      border:1px solid var(--greenBorder);
+      border-radius:18px;
+      padding:14px;
+      box-shadow:0 12px 24px rgba(0,0,0,.28);
+      width:100%;
+      max-width:100%;
+      overflow:hidden;
+    }
+
+    .topline {
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:10px;
+    }
+
+    .city {
+      font-size:20px;
+      font-weight:900;
+    }
+
+    .market-meta {
+      color:var(--muted);
+      font-size:13px;
+      margin-top:5px;
+      letter-spacing:.04em;
+      text-transform:uppercase;
+    }
+
+    .badge {
+      display:inline-flex;
+      align-items:center;
+      gap:5px;
+      padding:7px 9px;
+      border-radius:10px;
+      font-size:11px;
+      font-weight:900;
+      white-space:nowrap;
+      border:1px solid rgba(34,197,94,.35);
+      background:rgba(34,197,94,.13);
+      color:var(--green);
+      flex:0 0 auto;
+    }
+
+    .badge.warn {
+      border-color:rgba(250,204,21,.35);
+      background:rgba(250,204,21,.10);
+      color:#fde047;
+    }
+
+    .badge.cold {
+      border-color:rgba(96,165,250,.35);
+      background:rgba(96,165,250,.10);
+      color:#93c5fd;
+    }
+
+    .badge.unknown {
+      border-color:rgba(148,163,184,.25);
+      background:rgba(148,163,184,.08);
+      color:#94a3b8;
+    }
+
+    .big-temp {
+      color:var(--green);
+      font-size:48px;
+      line-height:1;
+      font-weight:950;
+      margin-top:18px;
+      letter-spacing:-.04em;
+    }
+
+    .obs-code {
+      color:rgba(148,163,184,.45);
+      margin-top:8px;
+      font-size:13px;
+      letter-spacing:.08em;
+    }
+
+    .airline {
+      color:#77a7ff;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;
+      font-size:14px;
+      margin:16px 0 14px;
+      line-height:1.35;
+      white-space:normal;
+      overflow-wrap:anywhere;
+    }
+
+    .bucket-list {
+      display:grid;
+      gap:8px;
+      width:100%;
+      max-width:100%;
+    }
+
+    .bucket-row {
+      display:grid;
+      grid-template-columns:minmax(0, 1fr) auto;
+      gap:8px;
+      align-items:center;
+      min-height:46px;
+      background:rgba(0,0,0,.62);
+      border:1px solid rgba(34,197,94,.10);
+      border-radius:12px;
+      padding:10px;
+      color:rgba(229,231,235,.45);
+      width:100%;
+      max-width:100%;
+      overflow:hidden;
+    }
+
+    .bucket-row.leader {
+      border-color:rgba(34,197,94,.42);
+      color:var(--text);
+    }
+
+    .bucket-row.contender {
+      color:var(--text);
+    }
+
+    .bucket-left {
+      display:flex;
+      align-items:center;
+      gap:7px;
+      min-width:0;
+      overflow:hidden;
+    }
+
+    .bucket-role {
+      font-size:10px;
+      font-weight:950;
+      color:var(--muted);
+      white-space:nowrap;
+      flex:0 0 auto;
+    }
+
+    .leader-label { color:var(--green); }
+    .contender-label { color:#fde047; }
+
+    .bucket-label {
+      font-size:15px;
+      font-weight:950;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      min-width:0;
+    }
+
+    .prices {
+      display:grid;
+      justify-items:end;
+      gap:2px;
+      font-size:13px;
+      white-space:nowrap;
+      min-width:60px;
+      flex:0 0 auto;
+    }
+
+    .yes-price {
+      color:var(--green);
+      font-weight:950;
+    }
+
+    .ask-price {
+      color:rgba(229,231,235,.55);
+      font-weight:800;
+    }
+
+    .price-caption {
+      color:var(--muted);
+      font-size:9px;
+      letter-spacing:.05em;
+      text-transform:uppercase;
+    }
+
+    .confirm {
+      display:flex;
+      align-items:flex-start;
+      gap:8px;
+      color:var(--green);
+      font-size:14px;
+      margin-top:16px;
+      line-height:1.35;
+    }
+
+    .divider {
+      height:1px;
+      background:rgba(34,197,94,.12);
+      margin:14px 0;
+    }
+
+    .small-data {
+      display:grid;
+      gap:5px;
+      color:var(--muted);
+      font-size:12px;
+    }
+
+    .small-row {
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+    }
+
+    .small-row strong {
+      color:rgba(229,231,235,.82);
+    }
+
+    .kalshi-link {
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      margin-top:16px;
+      padding:12px 16px;
+      border-radius:10px;
+      color:#052e12;
+      background:var(--green);
+      text-decoration:none;
+      font-weight:950;
+      width:fit-content;
+      max-width:100%;
+    }
+
+    .error {
+      color:var(--bad);
+      font-size:12px;
+      margin-top:10px;
+    }
+
+    @media (min-width: 760px) {
+      main { padding:14px; }
+      .grid { grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); }
+      .controls { display:flex; }
+      .controls button, .controls select { min-width:150px; }
+      .card { padding:16px; }
+      .big-temp { font-size:52px; }
+      .bucket-role { font-size:11px; }
+      .bucket-label { font-size:16px; }
+      .prices { font-size:14px; min-width:66px; }
+    }
   </style>
 </head>
 <body>
 <header>
-  <h1>Kalshi WX Market Board</h1>
+  <h1>NowCast Pro - Temperature Market Board</h1>
   <div class="sub">
-    Market leader is ranked by current Kalshi YES midpoint/price. Observed leader uses public NWS station observations and local city time.
+    Leader and contender are based on current Kalshi market favorability using YES bid/ask midpoint.
+    Observed bucket is based on public NWS station observations.
   </div>
   <div class="controls">
-    <button id="highBtn" class="active" onclick="setType('high')">HIGH Markets</button>
-    <button id="lowBtn" onclick="setType('low')">LOW Markets</button>
-    <button onclick="loadBoard(true)">Refresh now</button>
+    <button id="lowBtn" class="active" onclick="setType('low')">LOW Markets</button>
+    <button id="highBtn" onclick="setType('high')">HIGH Markets</button>
+    <button onclick="loadBoard(true)">Refresh</button>
     <select id="sortMode" onchange="render()">
       <option value="default">Sort: Default</option>
-      <option value="leader">Sort: Highest leader price</option>
-      <option value="agree">Sort: Agreement first</option>
-      <option value="city">Sort: City</option>
+      <option value="leader">Highest favorite first</option>
+      <option value="agree">Lock match first</option>
+      <option value="city">City A-Z</option>
     </select>
-    <span class="sub" id="status">Loading...</span>
   </div>
+  <div class="statusline" id="status">Loading...</div>
 </header>
+
 <main>
+  <div class="section-title" id="sectionTitle">LOW Markets</div>
   <div class="grid" id="grid"></div>
 </main>
 
 <script>
 let board = [];
-let marketType = "high";
+let marketType = "low";
 
 function fmtTemp(v) {
-  return (v === null || v === undefined || Number.isNaN(v)) ? "—" : `${Math.round(v)}°`;
+  return (v === null || v === undefined || Number.isNaN(v)) ? "—" : `${Math.round(v)}°F`;
 }
 function cents(v) {
   return (v === null || v === undefined || Number.isNaN(v)) ? "—" : `${Math.round(v)}¢`;
 }
 function fmtNum(v) {
   return (v === null || v === undefined) ? "—" : Number(v).toLocaleString();
+}
+function kalshiMarketUrl(ticker) {
+  if (!ticker) return "https://kalshi.com/markets";
+  return `https://kalshi.com/markets/${ticker}`;
 }
 function obsUrl(c) {
   const end = new Date();
@@ -2369,7 +2681,9 @@ function obsUrl(c) {
 }
 function cToF(c) { return c * 9 / 5 + 32; }
 function localYmd(iso, tz) {
-  const parts = new Intl.DateTimeFormat("en-US", {timeZone:tz, year:"numeric", month:"2-digit", day:"2-digit"}).formatToParts(new Date(iso));
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone:tz, year:"numeric", month:"2-digit", day:"2-digit"
+  }).formatToParts(new Date(iso));
   const y = parts.find(p => p.type === "year")?.value;
   const m = parts.find(p => p.type === "month")?.value;
   const d = parts.find(p => p.type === "day")?.value;
@@ -2377,7 +2691,9 @@ function localYmd(iso, tz) {
 }
 function localTime(iso, tz) {
   if (!iso) return "";
-  return new Date(iso).toLocaleString(undefined, {timeZone:tz, month:"numeric", day:"numeric", hour:"numeric", minute:"2-digit"});
+  return new Date(iso).toLocaleString(undefined, {
+    timeZone:tz, hour:"numeric", minute:"2-digit"
+  });
 }
 function parseObs(c, data) {
   const features = data?.features || [];
@@ -2395,7 +2711,9 @@ function parseObs(c, data) {
   obs.sort((a,b) => new Date(b.time) - new Date(a.time));
   const todayObs = obs.filter(o => o.day === today);
 
-  let high = null, low = null;
+  let high = null;
+  let low = null;
+
   for (const o of todayObs) {
     if (!high || o.temp > high.temp) high = o;
     if (!low || o.temp < low.temp) low = o;
@@ -2410,7 +2728,6 @@ function parseObs(c, data) {
     obsLowTime: low?.time ?? "",
   };
 }
-
 function bucketMatchesValue(b, value) {
   if (value === null || value === undefined) return false;
   const rounded = Math.round(value);
@@ -2420,23 +2737,12 @@ function bucketMatchesValue(b, value) {
   return false;
 }
 function bucketCenter(b) {
+  if (!b) return null;
   if (b.center !== null && b.center !== undefined) return b.center;
   if (b.low !== null && b.high !== null) return (b.low + b.high) / 2;
   if (b.low !== null) return b.low;
   if (b.high !== null) return b.high;
   return null;
-}
-function statusFor(leader, observed) {
-  if (!leader || !observed) return {text:"No obs match yet", cls:"unknown"};
-  if (leader.ticker === observed.ticker) return {text:"Market agrees with observed", cls:"agree"};
-
-  const lc = bucketCenter(leader);
-  const oc = bucketCenter(observed);
-  if (lc === null || oc === null) return {text:"Market/obs mismatch", cls:"unknown"};
-
-  if (lc > oc) return {text:"Market pricing higher than observed", cls:"hot"};
-  if (lc < oc) return {text:"Market pricing lower than observed", cls:"cold"};
-  return {text:"Market/obs near same boundary", cls:"unknown"};
 }
 function marketLeader(buckets) {
   return (buckets || [])[0] || null;
@@ -2448,91 +2754,138 @@ function observedLeader(c, buckets) {
   const value = marketType === "high" ? c.obs?.obsHigh : c.obs?.obsLow;
   return (buckets || []).find(b => bucketMatchesValue(b, value)) || null;
 }
+function statusFor(leader, obsLead) {
+  if (!leader || !obsLead) return {text:"WAITING", cls:"unknown", message:"Waiting for public obs to match a bucket."};
+  if (leader.ticker === obsLead.ticker) {
+    return {text:"LOCK MATCH", cls:"", message:"Public observed temp currently matches the market leader bucket."};
+  }
 
+  const lc = bucketCenter(leader);
+  const oc = bucketCenter(obsLead);
+
+  if (lc !== null && oc !== null) {
+    if (lc > oc) return {text:"MARKET HOTTER", cls:"warn", message:"Market favorite is warmer than the current observed bucket."};
+    if (lc < oc) return {text:"MARKET COLDER", cls:"cold", message:"Market favorite is colder than the current observed bucket."};
+  }
+
+  return {text:"MISMATCH", cls:"unknown", message:"Market favorite and observed bucket do not currently match."};
+}
 function setType(t) {
   marketType = t;
-  document.getElementById("highBtn").classList.toggle("active", t === "high");
   document.getElementById("lowBtn").classList.toggle("active", t === "low");
+  document.getElementById("highBtn").classList.toggle("active", t === "high");
+  document.getElementById("sectionTitle").textContent = t === "low" ? "🔒 LOW Markets" : "🔒 HIGH Markets";
   render();
 }
+function bucketRow(b, idx, obsLead) {
+  const isLeader = idx === 0;
+  const isContender = idx === 1;
+  const role = isLeader ? "👑 LEADER" : isContender ? "⚔️ CONTENDER" : "";
+  const roleClass = isLeader ? "leader-label" : isContender ? "contender-label" : "";
+  const rowClass = isLeader ? "leader" : isContender ? "contender" : "";
+  const obsMark = obsLead && obsLead.ticker === b.ticker ? " ✅" : "";
 
+  return `
+    <div class="bucket-row ${rowClass}">
+      <div class="bucket-left">
+        ${role ? `<span class="bucket-role ${roleClass}">${role}</span>` : ""}
+        <span class="bucket-label">${b.label}${obsMark}</span>
+      </div>
+      <div class="prices">
+        <div>
+          <span class="yes-price">${cents(b.yes_bid)}</span>
+          <span class="ask-price"> / ${cents(b.yes_ask)}</span>
+        </div>
+        <div class="price-caption">YES bid / ask</div>
+      </div>
+    </div>
+  `;
+}
 function render() {
   const mode = document.getElementById("sortMode").value;
   let rows = [...board];
 
   if (mode === "city") rows.sort((a,b) => a.name.localeCompare(b.name));
-  if (mode === "leader") rows.sort((a,b) => ((marketLeader(b.markets[marketType].buckets)?.score) ?? 0) - ((marketLeader(a.markets[marketType].buckets)?.score) ?? 0));
-  if (mode === "agree") rows.sort((a,b) => {
-    const ab = a.markets[marketType].buckets, bb = b.markets[marketType].buckets;
-    const as = statusFor(marketLeader(ab), observedLeader(a, ab)).cls === "agree" ? 0 : 1;
-    const bs = statusFor(marketLeader(bb), observedLeader(b, bb)).cls === "agree" ? 0 : 1;
-    return as - bs;
-  });
+
+  if (mode === "leader") {
+    rows.sort((a,b) => {
+      const bl = marketLeader(b.markets[marketType].buckets);
+      const al = marketLeader(a.markets[marketType].buckets);
+      return (bl?.score ?? 0) - (al?.score ?? 0);
+    });
+  }
+
+  if (mode === "agree") {
+    rows.sort((a,b) => {
+      const ab = a.markets[marketType].buckets || [];
+      const bb = b.markets[marketType].buckets || [];
+      const as = statusFor(marketLeader(ab), observedLeader(a, ab)).text === "LOCK MATCH" ? 0 : 1;
+      const bs = statusFor(marketLeader(bb), observedLeader(b, bb)).text === "LOCK MATCH" ? 0 : 1;
+      return as - bs;
+    });
+  }
 
   document.getElementById("grid").innerHTML = rows.map(c => {
-    const m = c.markets[marketType];
+    const m = c.markets[marketType] || {};
     const buckets = m.buckets || [];
     const lead = marketLeader(buckets);
     const cont = contender(buckets);
     const obsLead = observedLeader(c, buckets);
     const st = statusFor(lead, obsLead);
+
     const obsValue = marketType === "high" ? c.obs?.obsHigh : c.obs?.obsLow;
     const obsTime = marketType === "high" ? c.obs?.obsHighTime : c.obs?.obsLowTime;
-    const label = marketType.toUpperCase();
+    const observedLabel = marketType === "high" ? "Observed HIGH" : "Observed LOW";
+    const marketLabel = marketType.toUpperCase();
+    const rest = buckets.slice(2, 6);
 
     return `
       <div class="card">
-        <div class="cityline">
+        <div class="topline">
           <div>
-            <div class="code">${label} · ${c.city_key}</div>
-            <div class="name">${c.name}</div>
-            <div class="station">${c.station} · ${m.series}</div>
+            <div class="city">${c.name}</div>
+            <div class="market-meta">${marketLabel} · ${c.station}</div>
           </div>
-          <span class="badge ${st.cls}">${st.text}</span>
+          <div class="badge ${st.cls}">🔒 ${st.text}</div>
         </div>
 
-        <div class="obsbox">
-          <div class="row"><span>Last observed</span><strong>${fmtTemp(c.obs?.obsTemp)}</strong></div>
-          <div class="row"><span>Observed ${label} so far</span><strong>${fmtTemp(obsValue)}</strong></div>
-          <div class="row"><span>Observed leader</span><strong>${obsLead ? obsLead.label : "—"}</strong></div>
-          <div class="muted" style="font-size:12px;">${obsTime ? "Time: " + localTime(obsTime, c.tz) : ""}</div>
+        <div class="big-temp">${fmtTemp(obsValue)}</div>
+        <div class="obs-code">${lead ? fmtNum(lead.volume) : ""}</div>
+
+        <div class="airline">📊 ${observedLabel}: ${fmtTemp(obsValue)}${obsTime ? " at " + localTime(obsTime, c.tz) : ""} ✅</div>
+
+        <div class="bucket-list">
+          ${lead ? bucketRow(lead, 0, obsLead) : ""}
+          ${cont ? bucketRow(cont, 1, obsLead) : ""}
+          ${rest.map((b, i) => bucketRow(b, i + 2, obsLead)).join("")}
         </div>
 
-        <div class="leaders">
-          <div class="leaderbox">
-            <div class="leader-title">Market Leader</div>
-            <div class="leader-main"><span>${lead ? lead.label : "—"}</span><span class="price">${lead ? cents(lead.score) : "—"}</span></div>
-            <div class="meta">${lead ? `YES ${cents(lead.yes_bid)} / ${cents(lead.yes_ask)} · NO ${cents(lead.no_bid)} / ${cents(lead.no_ask)} · Vol ${fmtNum(lead.volume)}` : ""}</div>
-          </div>
-          <div class="leaderbox">
-            <div class="leader-title">Next Contender</div>
-            <div class="leader-main"><span>${cont ? cont.label : "—"}</span><span class="price">${cont ? cents(cont.score) : "—"}</span></div>
-            <div class="meta">${cont ? `YES ${cents(cont.yes_bid)} / ${cents(cont.yes_ask)} · NO ${cents(cont.no_bid)} / ${cents(cont.no_ask)} · Vol ${fmtNum(cont.volume)}` : ""}</div>
-          </div>
+        <div class="confirm">✅ <span>${st.message}</span></div>
+
+        <div class="divider"></div>
+
+        <div class="small-data">
+          <div class="small-row"><span>Observed bucket</span><strong>${obsLead ? obsLead.label : "—"}</strong></div>
+          <div class="small-row"><span>Observed time</span><strong>${obsTime ? localTime(obsTime, c.tz) : "—"}</strong></div>
+          <div class="small-row"><span>Leader YES bid / ask</span><strong>${lead ? `${cents(lead.yes_bid)} / ${cents(lead.yes_ask)}` : "—"}</strong></div>
+          <div class="small-row"><span>Contender YES bid / ask</span><strong>${cont ? `${cents(cont.yes_bid)} / ${cents(cont.yes_ask)}` : "—"}</strong></div>
+          <div class="small-row"><span>Leader volume</span><strong>${lead ? fmtNum(lead.volume) : "—"}</strong></div>
         </div>
 
         ${m.error ? `<div class="error">${m.error}</div>` : ""}
 
-        <div class="buckets">
-          ${buckets.map((b, idx) => `
-            <div class="bucket ${idx === 0 ? "lead" : ""} ${obsLead && obsLead.ticker === b.ticker ? "obs" : ""}">
-              <strong>${b.label}</strong>
-              <span class="muted">YES ${cents(b.yes_bid)} / ${cents(b.yes_ask)} · Vol ${fmtNum(b.volume)}</span>
-              <span class="price">${cents(b.score)}</span>
-            </div>
-          `).join("")}
-        </div>
+        <a class="kalshi-link" href="${kalshiMarketUrl(lead?.ticker)}" target="_blank" rel="noopener">🔗 Trade on Kalshi</a>
       </div>
     `;
   }).join("");
 }
-
 async function loadBoard(manual=false) {
   const status = document.getElementById("status");
   status.textContent = manual ? "Refreshing..." : "Loading...";
 
   const res = await fetch("/api/kalshi/market-board", {cache:"no-store"});
   const data = await res.json();
+
   if (!data.ok) {
     status.textContent = data.error || "Failed to load market board";
     return;
@@ -2553,14 +2906,13 @@ async function loadBoard(manual=false) {
   render();
   status.textContent = `Last refresh: ${new Date().toLocaleTimeString()} · ${rows.length} cities`;
 }
-
+setType("low");
 loadBoard();
 setInterval(() => loadBoard(false), 5 * 60 * 1000);
 </script>
 </body>
 </html>
 """
-
 
 @app.get("/market-board", response_class=HTMLResponse)
 async def market_board_dashboard():

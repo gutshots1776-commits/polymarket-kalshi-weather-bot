@@ -2098,6 +2098,45 @@ ACTIVE_KALSHI_TEMP_SERIES = {
 }
 
 
+def _best_yes_bid_ask_from_orderbook(orderbook_payload: dict) -> dict:
+    """
+    Extract best YES bid/ask in cents from Kalshi orderbook response.
+    Handles both common shapes:
+      {"orderbook": {"yes": [[price, qty]], "no": [[price, qty]]}}
+      {"yes": [[price, qty]], "no": [[price, qty]]}
+    """
+    ob = orderbook_payload.get("orderbook") or orderbook_payload
+    yes_levels = ob.get("yes") or []
+    no_levels = ob.get("no") or []
+
+    def clean_price(x):
+        try:
+            if isinstance(x, (list, tuple)) and x:
+                return float(x[0])
+            return float(x)
+        except Exception:
+            return None
+
+    yes_prices = [clean_price(x) for x in yes_levels]
+    no_prices = [clean_price(x) for x in no_levels]
+    yes_prices = [x for x in yes_prices if x is not None and x > 0]
+    no_prices = [x for x in no_prices if x is not None and x > 0]
+
+    # YES bid is highest YES bid.
+    yes_bid = max(yes_prices) if yes_prices else None
+
+    # YES ask can be derived from highest NO bid: buying YES takes the opposite side of NO.
+    # If NO bid is 20c, implied YES ask is about 80c.
+    yes_ask = None
+    if no_prices:
+        yes_ask = 100.0 - max(no_prices)
+
+    return {
+        "yes_bid_effective": yes_bid,
+        "yes_ask_effective": yes_ask,
+    }
+
+
 def _market_price_score(m: dict) -> float:
     yes_bid = m.get("yes_bid")
     yes_ask = m.get("yes_ask")
@@ -2137,7 +2176,7 @@ def _parse_temp_bucket(title: str, ticker: str) -> dict:
         threshold = int(above_match.group(1))
         return {
             "bucket_type": "above",
-            "label": f">{threshold}°",
+            "label": f"More than {threshold}°",
             "low": threshold + 1,
             "high": None,
             "threshold": threshold,
@@ -2149,7 +2188,7 @@ def _parse_temp_bucket(title: str, ticker: str) -> dict:
         threshold = int(below_match.group(1))
         return {
             "bucket_type": "below",
-            "label": f"<{threshold}°",
+            "label": f"Less than {threshold}°",
             "low": None,
             "high": threshold - 1,
             "threshold": threshold,
@@ -2241,7 +2280,39 @@ async def kalshi_market_board():
                     ticker = m.get("ticker") or ""
                     title = m.get("title") or ticker
                     bucket = _parse_temp_bucket(title, ticker)
-                    score = _market_price_score(m)
+
+                    # The /markets payload may not include usable live bid/ask.
+                    # Pull the orderbook so dashboard prices match the current book.
+                    ob_px = {"yes_bid_effective": None, "yes_ask_effective": None}
+                    try:
+                        ob_data = await client.get_orderbook(ticker)
+                        ob_px = _best_yes_bid_ask_from_orderbook(ob_data)
+                    except Exception:
+                        pass
+
+                    yes_bid_eff = ob_px.get("yes_bid_effective")
+                    yes_ask_eff = ob_px.get("yes_ask_effective")
+
+                    # Fallback to market summary if orderbook was unavailable.
+                    if yes_bid_eff is None:
+                        yes_bid_eff = m.get("yes_bid")
+                    if yes_ask_eff is None:
+                        yes_ask_eff = m.get("yes_ask")
+
+                    # Final fallback from NO side, if present.
+                    if (yes_bid_eff is None or yes_bid_eff == 0) and m.get("no_ask"):
+                        yes_bid_eff = max(0, 100 - float(m.get("no_ask")))
+                    if (yes_ask_eff is None or yes_ask_eff == 0) and m.get("no_bid"):
+                        yes_ask_eff = max(0, 100 - float(m.get("no_bid")))
+
+                    if yes_bid_eff and yes_ask_eff:
+                        score = (float(yes_bid_eff) + float(yes_ask_eff)) / 2.0
+                    elif yes_bid_eff:
+                        score = float(yes_bid_eff)
+                    elif yes_ask_eff:
+                        score = float(yes_ask_eff)
+                    else:
+                        score = _market_price_score(m)
 
                     buckets.append({
                         "ticker": ticker,
@@ -2254,6 +2325,8 @@ async def kalshi_market_board():
                         "center": bucket["center"],
                         "yes_bid": m.get("yes_bid"),
                         "yes_ask": m.get("yes_ask"),
+                        "yes_bid_effective": yes_bid_eff,
+                        "yes_ask_effective": yes_ask_eff,
                         "no_bid": m.get("no_bid"),
                         "no_ask": m.get("no_ask"),
                         "last_price": m.get("last_price"),
@@ -2669,8 +2742,19 @@ function cents(v) {
 }
 function pricePair(b) {
   if (!b) return "— / —";
-  const bid = (b.yes_bid !== null && b.yes_bid !== undefined) ? b.yes_bid : b.last_price;
-  const ask = (b.yes_ask !== null && b.yes_ask !== undefined) ? b.yes_ask : b.score;
+
+  const bid = (
+    b.yes_bid_effective !== null && b.yes_bid_effective !== undefined && b.yes_bid_effective > 0
+  ) ? b.yes_bid_effective : (
+    b.yes_bid !== null && b.yes_bid !== undefined && b.yes_bid > 0
+  ) ? b.yes_bid : null;
+
+  const ask = (
+    b.yes_ask_effective !== null && b.yes_ask_effective !== undefined && b.yes_ask_effective > 0
+  ) ? b.yes_ask_effective : (
+    b.yes_ask !== null && b.yes_ask !== undefined && b.yes_ask > 0
+  ) ? b.yes_ask : null;
+
   return `${cents(bid)} / ${cents(ask)}`;
 }
 function fmtNum(v) {
@@ -2750,6 +2834,20 @@ function bucketCenter(b) {
   if (b.high !== null) return b.high;
   return null;
 }
+
+function displayBucketLabel(b) {
+  if (!b) return "—";
+  if (b.bucket_type === "range" && b.low !== null && b.high !== null) {
+    return `${b.low}-${b.high}°`;
+  }
+  if (b.bucket_type === "below" && b.threshold !== null && b.threshold !== undefined) {
+    return `Less than ${b.threshold}°`;
+  }
+  if (b.bucket_type === "above" && b.threshold !== null && b.threshold !== undefined) {
+    return `More than ${b.threshold}°`;
+  }
+  return String(b.label || b.title || b.ticker || "—").replace(">", "More than ").replace("<", "Less than ");
+}
 function marketLeader(buckets) {
   return (buckets || [])[0] || null;
 }
@@ -2795,7 +2893,7 @@ function bucketRow(b, idx, obsLead) {
     <div class="bucket-row ${rowClass}">
       <div class="bucket-left">
         ${role ? `<span class="bucket-role ${roleClass}">${role}</span>` : ""}
-        <span class="bucket-label">${b.label}${obsMark}</span>
+        <span class="bucket-label">${displayBucketLabel(b)}${obsMark}</span>
       </div>
       <div class="prices">
         <div>
@@ -2871,7 +2969,7 @@ function render() {
         <div class="divider"></div>
 
         <div class="small-data">
-          <div class="small-row"><span>Observed bucket</span><strong>${obsLead ? obsLead.label : "—"}</strong></div>
+          <div class="small-row"><span>Observed bucket</span><strong>${obsLead ? displayBucketLabel(obsLead) : "—"}</strong></div>
           <div class="small-row"><span>Observed time</span><strong>${obsTime ? localTime(obsTime, c.tz) : "—"}</strong></div>
           <div class="small-row"><span>Leader YES bid / ask</span><strong>${lead ? pricePair(lead) : "—"}</strong></div>
           <div class="small-row"><span>Contender YES bid / ask</span><strong>${cont ? pricePair(cont) : "—"}</strong></div>

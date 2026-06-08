@@ -2243,6 +2243,95 @@ async def _fetch_kalshi_series_markets(client, series: str) -> list:
     return markets
 
 
+
+
+def _wx_cents(value):
+    """Convert Kalshi dollar price fields like 0.66 into cents like 66."""
+    try:
+        if value is None:
+            return None
+        v = float(value)
+        if v <= 0:
+            return None
+        # Kalshi *_dollars fields are decimal dollars/probability: 0.66 = 66c.
+        if v <= 1:
+            return round(v * 100, 2)
+        # Older/int fields may already be cents.
+        return round(v, 2)
+    except Exception:
+        return None
+
+
+def _wx_num(value):
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except Exception:
+        return None
+
+
+def _wx_market_prices(m: dict) -> dict:
+    yes_bid = _wx_cents(m.get("yes_bid_dollars"))
+    yes_ask = _wx_cents(m.get("yes_ask_dollars"))
+    no_bid = _wx_cents(m.get("no_bid_dollars"))
+    no_ask = _wx_cents(m.get("no_ask_dollars"))
+    last_price = _wx_cents(m.get("last_price_dollars"))
+
+    # Backward compatibility with older fields.
+    if yes_bid is None:
+        yes_bid = _wx_cents(m.get("yes_bid"))
+    if yes_ask is None:
+        yes_ask = _wx_cents(m.get("yes_ask"))
+    if no_bid is None:
+        no_bid = _wx_cents(m.get("no_bid"))
+    if no_ask is None:
+        no_ask = _wx_cents(m.get("no_ask"))
+    if last_price is None:
+        last_price = _wx_cents(m.get("last_price"))
+
+    # Derive YES side from NO side if needed.
+    if yes_bid is None and no_ask is not None:
+        yes_bid = max(0, 100 - no_ask)
+    if yes_ask is None and no_bid is not None:
+        yes_ask = max(0, 100 - no_bid)
+
+    if yes_bid is None and last_price is not None:
+        yes_bid = last_price
+    if yes_ask is None and last_price is not None:
+        yes_ask = last_price
+
+    if yes_bid is not None and yes_ask is not None:
+        midpoint = (yes_bid + yes_ask) / 2
+        spread = abs(yes_ask - yes_bid)
+    elif yes_bid is not None:
+        midpoint = yes_bid
+        spread = None
+    elif yes_ask is not None:
+        midpoint = yes_ask
+        spread = None
+    else:
+        midpoint = 0
+        spread = None
+
+    return {
+        "yes_bid": yes_bid,
+        "yes_ask": yes_ask,
+        "no_bid": no_bid,
+        "no_ask": no_ask,
+        "last_price": last_price,
+        "midpoint": midpoint,
+        "spread": spread,
+        "volume": _wx_num(m.get("volume_fp")) or _wx_num(m.get("volume")) or 0,
+        "volume_24h": _wx_num(m.get("volume_24h_fp")) or 0,
+        "open_interest": _wx_num(m.get("open_interest_fp")) or _wx_num(m.get("open_interest")) or 0,
+        "liquidity": _wx_num(m.get("liquidity_dollars")) or _wx_num(m.get("liquidity")) or 0,
+    }
+
+
+def _market_price_score(m: dict) -> float:
+    return float(_wx_market_prices(m).get("midpoint") or 0)
+
 @app.get("/api/kalshi/market-board")
 async def kalshi_market_board():
     from datetime import datetime, timezone
@@ -2280,6 +2369,8 @@ async def kalshi_market_board():
                     ticker = m.get("ticker") or ""
                     title = m.get("title") or ticker
                     bucket = _parse_temp_bucket(title, ticker)
+                    px = _wx_market_prices(m)
+                    score = px.get("midpoint") or _market_price_score(m)
 
                     # Keep this endpoint fast. Use the market summary fields first.
                     # Orderbook-per-bucket was too slow and made the dashboard spin.
@@ -2322,16 +2413,16 @@ async def kalshi_market_board():
                         "high": bucket["high"],
                         "threshold": bucket["threshold"],
                         "center": bucket["center"],
-                        "yes_bid": m.get("yes_bid"),
-                        "yes_ask": m.get("yes_ask"),
-                        "yes_bid_effective": yes_bid_eff,
-                        "yes_ask_effective": yes_ask_eff,
-                        "no_bid": m.get("no_bid"),
-                        "no_ask": m.get("no_ask"),
-                        "last_price": m.get("last_price"),
-                        "volume": m.get("volume") or 0,
-                        "open_interest": m.get("open_interest") or 0,
-                        "score": score,
+                        "yes_bid": px.get("yes_bid"),
+                        "yes_ask": px.get("yes_ask"),
+                        "yes_bid_effective": px.get("yes_bid"),
+                        "yes_ask_effective": px.get("yes_ask"),
+                        "no_bid": px.get("no_bid"),
+                        "no_ask": px.get("no_ask"),
+                        "last_price": px.get("last_price"),
+                        "volume": px.get("volume") or 0,
+                        "open_interest": px.get("open_interest") or 0,
+                        "score": px.get("midpoint") or score,
                     })
 
                 buckets.sort(key=lambda x: x["score"], reverse=True)
@@ -2838,17 +2929,17 @@ function displayBucketLabel(b) {
     return `${b.low}-${b.high}°`;
   }
   if (b.bucket_type === "below" && b.threshold !== null && b.threshold !== undefined) {
-    return `Less than ${b.threshold}°`;
+    return `${Number(b.threshold) - 1}° or below`;
   }
   if (b.bucket_type === "above" && b.threshold !== null && b.threshold !== undefined) {
-    return `More than ${b.threshold}°`;
+    return `${Number(b.threshold) + 1}° or above`;
   }
 
   let txt = String(b.label || b.title || b.ticker || "—");
-  txt = txt.replace(/^>\s*/, "More than ");
-  txt = txt.replace(/^<\s*/, "Less than ");
-  txt = txt.replace(">", "More than ");
-  txt = txt.replace("<", "Less than ");
+  txt = txt.replace(/^>\s*(\d+)/, (_, n) => `${Number(n) + 1}° or above`);
+  txt = txt.replace(/^<\s*(\d+)/, (_, n) => `${Number(n) - 1}° or below`);
+  txt = txt.replace(/>\s*(\d+)/, (_, n) => `${Number(n) + 1}° or above`);
+  txt = txt.replace(/<\s*(\d+)/, (_, n) => `${Number(n) - 1}° or below`);
   return txt;
 }
 function marketLeader(buckets) {
@@ -3055,11 +3146,11 @@ async def debug_kalshi_series(series_ticker: str):
             "ticker": m.get("ticker"),
             "title": m.get("title"),
             "subtitle": m.get("subtitle"),
-            "yes_bid": m.get("yes_bid"),
-            "yes_ask": m.get("yes_ask"),
-            "no_bid": m.get("no_bid"),
-            "no_ask": m.get("no_ask"),
-            "last_price": m.get("last_price"),
+            "yes_bid": px.get("yes_bid"),
+            "yes_ask": px.get("yes_ask"),
+            "no_bid": px.get("no_bid"),
+            "no_ask": px.get("no_ask"),
+            "last_price": px.get("last_price"),
             "open_interest": m.get("open_interest"),
             "volume": m.get("volume"),
             "liquidity": m.get("liquidity"),

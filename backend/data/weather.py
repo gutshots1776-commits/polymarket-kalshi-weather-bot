@@ -114,6 +114,7 @@ class EnsembleForecast:
 # Simple cache: (city_key, target_date_str) -> (timestamp, EnsembleForecast)
 _forecast_cache: Dict[str, tuple] = {}
 _CACHE_TTL = 300  # 5 minutes
+_FAILURE_CACHE_TTL = 300  # 5 minutes
 
 
 def _celsius_to_fahrenheit(c: float) -> float:
@@ -136,7 +137,8 @@ async def fetch_ensemble_forecast(city_key: str, target_date: Optional[date] = N
     now = time.time()
     if cache_key in _forecast_cache:
         cached_time, cached_forecast = _forecast_cache[cache_key]
-        if now - cached_time < _CACHE_TTL:
+        ttl = _FAILURE_CACHE_TTL if cached_forecast is None else _CACHE_TTL
+        if now - cached_time < ttl:
             return cached_forecast
 
     city = CITY_CONFIG[city_key]
@@ -200,6 +202,9 @@ async def fetch_ensemble_forecast(city_key: str, target_date: Optional[date] = N
             return forecast
 
     except Exception as e:
+        # Cache failures too, especially 429 rate limits, so one bad response
+        # does not turn into repeated calls during the same scan.
+        _forecast_cache[cache_key] = (time.time(), None)
         logger.warning(f"Failed to fetch ensemble forecast for {city_key}: {e}")
         return None
 

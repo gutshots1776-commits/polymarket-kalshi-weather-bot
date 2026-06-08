@@ -1398,6 +1398,37 @@ ENSEMBLE_TEMPS_DASHBOARD_HTML = r"""
     }
     .delta-hot { color: var(--warn); }
     .delta-cold { color: #60a5fa; }
+    .model-badge {
+      display: inline-block;
+      width: fit-content;
+      margin-top: 4px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .02em;
+      border: 1px solid var(--border);
+    }
+    .badge-track {
+      color: #86efac;
+      background: rgba(34, 197, 94, 0.12);
+      border-color: rgba(34, 197, 94, 0.35);
+    }
+    .badge-hot {
+      color: #fcd34d;
+      background: rgba(245, 158, 11, 0.12);
+      border-color: rgba(245, 158, 11, 0.35);
+    }
+    .badge-cold {
+      color: #93c5fd;
+      background: rgba(96, 165, 250, 0.12);
+      border-color: rgba(96, 165, 250, 0.35);
+    }
+    .badge-unknown {
+      color: var(--muted);
+      background: rgba(148, 163, 184, 0.10);
+      border-color: rgba(148, 163, 184, 0.25);
+    }
     .forecast-block {
       display: grid;
       gap: 8px;
@@ -1730,6 +1761,22 @@ function deltaClass(r) {
   return "";
 }
 
+function modelStatusText(r) {
+  if (r.modelNow === null || r.obsTemp === null) return "Waiting on observed/model data";
+  const d = r.obsTemp - r.modelNow;
+  if (d >= 1.5) return "Running hot vs model";
+  if (d <= -1.5) return "Running cold vs model";
+  return "On track with model";
+}
+
+function modelStatusClass(r) {
+  if (r.modelNow === null || r.obsTemp === null) return "badge-unknown";
+  const d = r.obsTemp - r.modelNow;
+  if (d >= 1.5) return "badge-hot";
+  if (d <= -1.5) return "badge-cold";
+  return "badge-track";
+}
+
 function renderCards() {
   const mode = document.getElementById("sortMode").value;
   let sorted = [...rows];
@@ -1773,6 +1820,7 @@ function renderCards() {
           <span>${deltaText(r)}</span>
           <strong></strong>
         </div>
+        <div class="model-badge ${modelStatusClass(r)}">${modelStatusText(r)}</div>
       </div>
 
       <div class="forecast-block">

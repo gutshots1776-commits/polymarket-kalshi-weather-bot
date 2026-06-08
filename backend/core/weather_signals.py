@@ -45,7 +45,7 @@ class WeatherTradingSignal:
         return abs(self.edge) >= settings.WEATHER_MIN_EDGE_THRESHOLD
 
 
-async def generate_weather_signal(market: WeatherMarket) -> Optional[WeatherTradingSignal]:
+async def generate_weather_signal(market: WeatherMarket, forecast: Optional[EnsembleForecast] = None) -> Optional[WeatherTradingSignal]:
     """
     Generate a trading signal for a weather temperature market.
 
@@ -54,7 +54,8 @@ async def generate_weather_signal(market: WeatherMarket) -> Optional[WeatherTrad
     - Compare to market price to find edge
     - Size using Kelly criterion
     """
-    forecast = await fetch_ensemble_forecast(market.city_key, market.target_date)
+    if forecast is None:
+        forecast = await fetch_ensemble_forecast(market.city_key, market.target_date)
     if not forecast or not forecast.member_highs:
         return None
 
@@ -181,9 +182,20 @@ async def scan_for_weather_signals() -> List[WeatherTradingSignal]:
 
     logger.info(f"Found {len(markets)} total weather temperature markets")
 
+    # Fetch each city/date forecast only once per scan.
+    # Kalshi can have many bracket markets for the same city/date, and calling
+    # Open-Meteo once per bracket can trigger 429 rate limits.
+    scan_forecasts = {}
     for market in markets:
         try:
-            signal = await generate_weather_signal(market)
+            forecast_key = (market.city_key, market.target_date)
+            if forecast_key not in scan_forecasts:
+                scan_forecasts[forecast_key] = await fetch_ensemble_forecast(
+                    market.city_key,
+                    market.target_date,
+                )
+
+            signal = await generate_weather_signal(market, scan_forecasts[forecast_key])
             if signal:
                 signals.append(signal)
         except Exception as e:

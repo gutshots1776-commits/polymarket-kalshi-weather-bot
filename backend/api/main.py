@@ -2281,29 +2281,28 @@ async def kalshi_market_board():
                     title = m.get("title") or ticker
                     bucket = _parse_temp_bucket(title, ticker)
 
-                    # The /markets payload may not include usable live bid/ask.
-                    # Pull the orderbook so dashboard prices match the current book.
-                    ob_px = {"yes_bid_effective": None, "yes_ask_effective": None}
+                    # Keep this endpoint fast. Use the market summary fields first.
+                    # Orderbook-per-bucket was too slow and made the dashboard spin.
+                    yes_bid_eff = m.get("yes_bid")
+                    yes_ask_eff = m.get("yes_ask")
+                    no_bid = m.get("no_bid")
+                    no_ask = m.get("no_ask")
+                    last_price = m.get("last_price")
+
+                    # If YES prices are missing, derive from NO side.
                     try:
-                        ob_data = await client.get_orderbook(ticker)
-                        ob_px = _best_yes_bid_ask_from_orderbook(ob_data)
+                        if (yes_bid_eff is None or yes_bid_eff == 0) and no_ask:
+                            yes_bid_eff = max(0, 100 - float(no_ask))
+                        if (yes_ask_eff is None or yes_ask_eff == 0) and no_bid:
+                            yes_ask_eff = max(0, 100 - float(no_bid))
                     except Exception:
                         pass
 
-                    yes_bid_eff = ob_px.get("yes_bid_effective")
-                    yes_ask_eff = ob_px.get("yes_ask_effective")
-
-                    # Fallback to market summary if orderbook was unavailable.
-                    if yes_bid_eff is None:
-                        yes_bid_eff = m.get("yes_bid")
-                    if yes_ask_eff is None:
-                        yes_ask_eff = m.get("yes_ask")
-
-                    # Final fallback from NO side, if present.
-                    if (yes_bid_eff is None or yes_bid_eff == 0) and m.get("no_ask"):
-                        yes_bid_eff = max(0, 100 - float(m.get("no_ask")))
-                    if (yes_ask_eff is None or yes_ask_eff == 0) and m.get("no_bid"):
-                        yes_ask_eff = max(0, 100 - float(m.get("no_bid")))
+                    # Last fallback from last trade price.
+                    if (yes_bid_eff is None or yes_bid_eff == 0) and last_price:
+                        yes_bid_eff = last_price
+                    if (yes_ask_eff is None or yes_ask_eff == 0) and last_price:
+                        yes_ask_eff = last_price
 
                     if yes_bid_eff and yes_ask_eff:
                         score = (float(yes_bid_eff) + float(yes_ask_eff)) / 2.0
@@ -2743,17 +2742,15 @@ function cents(v) {
 function pricePair(b) {
   if (!b) return "— / —";
 
-  const bid = (
-    b.yes_bid_effective !== null && b.yes_bid_effective !== undefined && b.yes_bid_effective > 0
-  ) ? b.yes_bid_effective : (
-    b.yes_bid !== null && b.yes_bid !== undefined && b.yes_bid > 0
-  ) ? b.yes_bid : null;
+  const bid =
+    (b.yes_bid_effective !== null && b.yes_bid_effective !== undefined && Number(b.yes_bid_effective) > 0) ? b.yes_bid_effective :
+    (b.yes_bid !== null && b.yes_bid !== undefined && Number(b.yes_bid) > 0) ? b.yes_bid :
+    null;
 
-  const ask = (
-    b.yes_ask_effective !== null && b.yes_ask_effective !== undefined && b.yes_ask_effective > 0
-  ) ? b.yes_ask_effective : (
-    b.yes_ask !== null && b.yes_ask !== undefined && b.yes_ask > 0
-  ) ? b.yes_ask : null;
+  const ask =
+    (b.yes_ask_effective !== null && b.yes_ask_effective !== undefined && Number(b.yes_ask_effective) > 0) ? b.yes_ask_effective :
+    (b.yes_ask !== null && b.yes_ask !== undefined && Number(b.yes_ask) > 0) ? b.yes_ask :
+    null;
 
   return `${cents(bid)} / ${cents(ask)}`;
 }
@@ -2846,7 +2843,13 @@ function displayBucketLabel(b) {
   if (b.bucket_type === "above" && b.threshold !== null && b.threshold !== undefined) {
     return `More than ${b.threshold}°`;
   }
-  return String(b.label || b.title || b.ticker || "—").replace(">", "More than ").replace("<", "Less than ");
+
+  let txt = String(b.label || b.title || b.ticker || "—");
+  txt = txt.replace(/^>\s*/, "More than ");
+  txt = txt.replace(/^<\s*/, "Less than ");
+  txt = txt.replace(">", "More than ");
+  txt = txt.replace("<", "Less than ");
+  return txt;
 }
 function marketLeader(buckets) {
   return (buckets || [])[0] || null;

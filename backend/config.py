@@ -12,6 +12,7 @@ class Settings(BaseSettings):
 
     # API Keys (optional)
     POLYMARKET_API_KEY: Optional[str] = None
+    POLYMARKET_ENABLED: bool = False
 
     # Kalshi API
     KALSHI_API_KEY_ID: Optional[str] = None
@@ -29,6 +30,7 @@ class Settings(BaseSettings):
     AI_DAILY_BUDGET_USD: float = 1.0
 
     # Bot settings - BTC 5-MIN TRADING
+    BTC_ENABLED: bool = False
     SIMULATION_MODE: bool = True
     INITIAL_BANKROLL: float = 10000.0
     KELLY_FRACTION: float = 0.15  # Fractional Kelly

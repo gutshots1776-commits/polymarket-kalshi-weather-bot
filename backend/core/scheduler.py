@@ -255,7 +255,7 @@ async def weather_scan_and_trade_job():
 
                 trade = Trade(
                     market_ticker=signal.market.market_id,
-                    platform="polymarket",
+                    platform=signal.market.platform,
                     event_slug=signal.market.slug,
                     market_type="weather",
                     direction=signal.direction,
@@ -399,14 +399,17 @@ def start_scheduler():
     scan_seconds = settings.SCAN_INTERVAL_SECONDS
     settle_seconds = settings.SETTLEMENT_INTERVAL_SECONDS
 
-    # Scan BTC markets every minute
-    scheduler.add_job(
-        scan_and_trade_job,
-        IntervalTrigger(seconds=scan_seconds),
-        id="market_scan",
-        replace_existing=True,
-        max_instances=1
-    )
+    # Scan BTC markets every minute, if enabled.
+    if settings.BTC_ENABLED:
+        scheduler.add_job(
+            scan_and_trade_job,
+            IntervalTrigger(seconds=scan_seconds),
+            id="market_scan",
+            replace_existing=True,
+            max_instances=1
+        )
+    else:
+        log_event("info", "BTC scanning disabled by BTC_ENABLED=false")
 
     # Check settlements every 2 minutes
     scheduler.add_job(
@@ -440,14 +443,18 @@ def start_scheduler():
         )
 
     scheduler.start()
-    log_event("success", "BTC 5-min trading scheduler started", {
-        "scan_interval": f"{scan_seconds}s",
+    log_event("success", "Trading scheduler started", {
+        "btc_enabled": settings.BTC_ENABLED,
+        "btc_scan_interval": f"{scan_seconds}s",
         "settlement_interval": f"{settle_seconds}s",
         "min_edge": f"{settings.MIN_EDGE_THRESHOLD:.0%}",
         "weather_enabled": settings.WEATHER_ENABLED,
+        "polymarket_enabled": settings.POLYMARKET_ENABLED,
+        "kalshi_enabled": settings.KALSHI_ENABLED,
     })
 
-    asyncio.create_task(scan_and_trade_job())
+    if settings.BTC_ENABLED:
+        asyncio.create_task(scan_and_trade_job())
 
     if settings.WEATHER_ENABLED:
         asyncio.create_task(weather_scan_and_trade_job())

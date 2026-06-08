@@ -155,13 +155,17 @@ async def scan_for_weather_signals() -> List[WeatherTradingSignal]:
 
     markets = []
 
-    # Polymarket
-    try:
-        poly_markets = await fetch_polymarket_weather_markets(city_keys)
-        markets.extend(poly_markets)
-        logger.info(f"Polymarket: {len(poly_markets)} weather markets")
-    except Exception as e:
-        logger.error(f"Failed to fetch Polymarket weather markets: {e}")
+    # Polymarket disabled by default. This comparison bot is Kalshi-only unless
+    # POLYMARKET_ENABLED=true is explicitly set.
+    if settings.POLYMARKET_ENABLED:
+        try:
+            poly_markets = await fetch_polymarket_weather_markets(city_keys)
+            markets.extend(poly_markets)
+            logger.info(f"Polymarket: {len(poly_markets)} weather markets")
+        except Exception as e:
+            logger.error(f"Failed to fetch Polymarket weather markets: {e}")
+    else:
+        logger.info("Polymarket weather market fetch disabled by POLYMARKET_ENABLED=false")
 
     # Kalshi
     if settings.KALSHI_ENABLED:

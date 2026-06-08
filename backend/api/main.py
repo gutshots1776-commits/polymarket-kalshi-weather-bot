@@ -1451,7 +1451,7 @@ ENSEMBLE_TEMPS_DASHBOARD_HTML = r"""
   <h1>Kalshi WX Ensemble + Observed Temps</h1>
   <div class="sub">
     Open-Meteo GFS/GEFS ensemble model temps plus latest public NWS station observations.
-    Observed high/low is calculated from public station observations returned so far today.
+    Observed high/low is calculated from public station observations returned so far today using each city's local timezone, including daylight saving time where applicable.
   </div>
   <div class="controls">
     <button onclick="loadTemps(true)">Refresh now</button>
@@ -1471,7 +1471,7 @@ ENSEMBLE_TEMPS_DASHBOARD_HTML = r"""
 <main>
   <div class="grid" id="grid"></div>
   <div class="footer">
-    Auto-refreshes every 60 minutes while open. This is not hidden ASOS 1-minute data and not final CLI settlement data.
+    Auto-refreshes every 60 minutes while open. Local observed times use each city's timezone and automatically account for daylight saving time. This is not hidden ASOS 1-minute data and not final CLI settlement data.
   </div>
 </main>
 
@@ -1506,6 +1506,8 @@ let rows = CITIES.map(c => ({
   obsTemp: null,
   obsHigh: null,
   obsLow: null,
+  obsHighTime: "",
+  obsLowTime: "",
   obsTime: "",
   days: [],
   n: 0,
@@ -1695,11 +1697,21 @@ function parseObserved(c, data) {
   const latest = obs[0] || null;
   const todayObs = obs.filter(o => o.day === todayKey);
 
+  let highObs = null;
+  let lowObs = null;
+
+  for (const o of todayObs) {
+    if (!highObs || o.temp > highObs.temp) highObs = o;
+    if (!lowObs || o.temp < lowObs.temp) lowObs = o;
+  }
+
   return {
     obsTemp: latest ? latest.temp : null,
     obsTime: latest ? latest.time : "",
-    obsHigh: todayObs.length ? Math.max(...todayObs.map(o => o.temp)) : null,
-    obsLow: todayObs.length ? Math.min(...todayObs.map(o => o.temp)) : null
+    obsHigh: highObs ? highObs.temp : null,
+    obsLow: lowObs ? lowObs.temp : null,
+    obsHighTime: highObs ? highObs.time : "",
+    obsLowTime: lowObs ? lowObs.time : ""
   };
 }
 
@@ -1743,10 +1755,20 @@ function renderCards() {
           <span>Last observed</span>
           <strong>${fmtTemp(r.obsTemp)}</strong>
         </div>
+        <div class="spread">${r.obsTime ? "Observed at: " + localTime(r.obsTime, r.tz) : ""}</div>
+
         <div class="compare-row">
-          <span>Observed today</span>
-          <strong>H ${fmtTemp(r.obsHigh)} / L ${fmtTemp(r.obsLow)}</strong>
+          <span>Observed high today</span>
+          <strong>${fmtTemp(r.obsHigh)}</strong>
         </div>
+        <div class="spread">${r.obsHighTime ? "High time: " + localTime(r.obsHighTime, r.tz) : ""}</div>
+
+        <div class="compare-row">
+          <span>Observed low today</span>
+          <strong>${fmtTemp(r.obsLow)}</strong>
+        </div>
+        <div class="spread">${r.obsLowTime ? "Low time: " + localTime(r.obsLowTime, r.tz) : ""}</div>
+
         <div class="compare-row ${deltaClass(r)}">
           <span>${deltaText(r)}</span>
           <strong></strong>
@@ -1813,6 +1835,8 @@ async function loadTemps(manual=false) {
         obsTemp: null,
         obsHigh: null,
         obsLow: null,
+        obsHighTime: "",
+        obsLowTime: "",
         obsTime: "",
         days: [],
         n: 0,

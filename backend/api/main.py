@@ -1297,7 +1297,7 @@ ENSEMBLE_TEMPS_DASHBOARD_HTML = r"""
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Kalshi WX Ensemble Temps</title>
+  <title>Kalshi WX Ensemble + Observed Temps</title>
   <style>
     :root {
       --bg: #0f172a;
@@ -1307,6 +1307,8 @@ ENSEMBLE_TEMPS_DASHBOARD_HTML = r"""
       --muted: #94a3b8;
       --border: #334155;
       --bad: #ef4444;
+      --good: #22c55e;
+      --warn: #f59e0b;
     }
     body {
       margin: 0;
@@ -1319,7 +1321,7 @@ ENSEMBLE_TEMPS_DASHBOARD_HTML = r"""
       border-bottom: 1px solid var(--border);
       position: sticky;
       top: 0;
-      background: rgba(15, 23, 42, 0.95);
+      background: rgba(15, 23, 42, 0.96);
       backdrop-filter: blur(8px);
       z-index: 10;
     }
@@ -1349,7 +1351,7 @@ ENSEMBLE_TEMPS_DASHBOARD_HTML = r"""
     main { padding: 14px; }
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
       gap: 12px;
     }
     .card {
@@ -1376,6 +1378,26 @@ ENSEMBLE_TEMPS_DASHBOARD_HTML = r"""
       color: var(--muted);
       margin-top: -4px;
     }
+    .compare {
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      padding: 9px 0;
+      margin-top: 10px;
+      display: grid;
+      gap: 5px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .compare-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .compare-row strong {
+      color: var(--text);
+    }
+    .delta-hot { color: var(--warn); }
+    .delta-cold { color: #60a5fa; }
     .forecast-block {
       display: grid;
       gap: 8px;
@@ -1426,18 +1448,20 @@ ENSEMBLE_TEMPS_DASHBOARD_HTML = r"""
 </head>
 <body>
 <header>
-  <h1>Kalshi WX Ensemble Temps</h1>
+  <h1>Kalshi WX Ensemble + Observed Temps</h1>
   <div class="sub">
-    GFS/GEFS ensemble forecast from Open-Meteo for the 20-city Kalshi watchlist.
-    This uses your browser to fetch the data, not Render’s server.
+    Open-Meteo GFS/GEFS ensemble model temps plus latest public NWS station observations.
+    Observed high/low is calculated from public station observations returned so far today.
   </div>
   <div class="controls">
     <button onclick="loadTemps(true)">Refresh now</button>
     <select id="sortMode" onchange="renderCards()">
       <option value="default">Sort: Default</option>
-      <option value="now_desc">Sort: Warmest now</option>
-      <option value="now_asc">Sort: Coldest now</option>
-      <option value="today_high_desc">Sort: Highest today</option>
+      <option value="delta_desc">Sort: Running hottest vs model</option>
+      <option value="delta_asc">Sort: Running coldest vs model</option>
+      <option value="obs_desc">Sort: Warmest observed</option>
+      <option value="obs_asc">Sort: Coldest observed</option>
+      <option value="today_high_desc">Sort: Highest forecast today</option>
       <option value="code">Sort: City code</option>
     </select>
     <span class="sub" id="status">Loading...</span>
@@ -1447,42 +1471,67 @@ ENSEMBLE_TEMPS_DASHBOARD_HTML = r"""
 <main>
   <div class="grid" id="grid"></div>
   <div class="footer">
-    Auto-refreshes every 60 minutes while open. This is model/grid forecast data, not official ASOS/METAR/DSM/CLI settlement data.
+    Auto-refreshes every 60 minutes while open. This is not hidden ASOS 1-minute data and not final CLI settlement data.
   </div>
 </main>
 
 <script>
 const CITIES = [
-  {code:"DEN", name:"Denver", lat:39.8561, lon:-104.6737},
-  {code:"NYC", name:"New York City", lat:40.7828, lon:-73.9653},
-  {code:"PHI", name:"Philadelphia", lat:39.8719, lon:-75.2411},
-  {code:"CHI", name:"Chicago", lat:41.7868, lon:-87.7522},
-  {code:"LA", name:"Los Angeles", lat:33.9425, lon:-118.4081},
-  {code:"MIA", name:"Miami", lat:25.7959, lon:-80.2870},
-  {code:"SF", name:"San Francisco", lat:37.6213, lon:-122.3790},
-  {code:"SEA", name:"Seattle", lat:47.4502, lon:-122.3088},
-  {code:"ATL", name:"Atlanta", lat:33.6407, lon:-84.4277},
-  {code:"AUS", name:"Austin", lat:30.1975, lon:-97.6664},
-  {code:"BOS", name:"Boston", lat:42.3656, lon:-71.0096},
-  {code:"DAL", name:"Dallas", lat:32.8471, lon:-96.8518},
-  {code:"DC", name:"Washington DC", lat:38.8512, lon:-77.0402},
-  {code:"HOU", name:"Houston", lat:29.6454, lon:-95.2789},
-  {code:"LV", name:"Las Vegas", lat:36.0801, lon:-115.1522},
-  {code:"MIN", name:"Minneapolis", lat:44.8848, lon:-93.2223},
-  {code:"NOLA", name:"New Orleans", lat:29.9934, lon:-90.2580},
-  {code:"OKC", name:"Oklahoma City", lat:35.3931, lon:-97.6007},
-  {code:"PHX", name:"Phoenix", lat:33.4342, lon:-112.0116},
-  {code:"SATX", name:"San Antonio", lat:29.5337, lon:-98.4698}
+  {code:"DEN", name:"Denver", lat:39.8561, lon:-104.6737, station:"KDEN", tz:"America/Denver"},
+  {code:"NYC", name:"New York City", lat:40.7828, lon:-73.9653, station:"KNYC", tz:"America/New_York"},
+  {code:"PHI", name:"Philadelphia", lat:39.8719, lon:-75.2411, station:"KPHL", tz:"America/New_York"},
+  {code:"CHI", name:"Chicago", lat:41.7868, lon:-87.7522, station:"KMDW", tz:"America/Chicago"},
+  {code:"LA", name:"Los Angeles", lat:33.9425, lon:-118.4081, station:"KLAX", tz:"America/Los_Angeles"},
+  {code:"MIA", name:"Miami", lat:25.7959, lon:-80.2870, station:"KMIA", tz:"America/New_York"},
+  {code:"SF", name:"San Francisco", lat:37.6213, lon:-122.3790, station:"KSFO", tz:"America/Los_Angeles"},
+  {code:"SEA", name:"Seattle", lat:47.4502, lon:-122.3088, station:"KSEA", tz:"America/Los_Angeles"},
+  {code:"ATL", name:"Atlanta", lat:33.6407, lon:-84.4277, station:"KATL", tz:"America/New_York"},
+  {code:"AUS", name:"Austin", lat:30.1975, lon:-97.6664, station:"KAUS", tz:"America/Chicago"},
+  {code:"BOS", name:"Boston", lat:42.3656, lon:-71.0096, station:"KBOS", tz:"America/New_York"},
+  {code:"DAL", name:"Dallas", lat:32.8471, lon:-96.8518, station:"KDAL", tz:"America/Chicago"},
+  {code:"DC", name:"Washington DC", lat:38.8512, lon:-77.0402, station:"KDCA", tz:"America/New_York"},
+  {code:"HOU", name:"Houston", lat:29.6454, lon:-95.2789, station:"KHOU", tz:"America/Chicago"},
+  {code:"LV", name:"Las Vegas", lat:36.0801, lon:-115.1522, station:"KLAS", tz:"America/Los_Angeles"},
+  {code:"MIN", name:"Minneapolis", lat:44.8848, lon:-93.2223, station:"KMSP", tz:"America/Chicago"},
+  {code:"NOLA", name:"New Orleans", lat:29.9934, lon:-90.2580, station:"KMSY", tz:"America/Chicago"},
+  {code:"OKC", name:"Oklahoma City", lat:35.3931, lon:-97.6007, station:"KOKC", tz:"America/Chicago"},
+  {code:"PHX", name:"Phoenix", lat:33.4342, lon:-112.0116, station:"KPHX", tz:"America/Phoenix"},
+  {code:"SATX", name:"San Antonio", lat:29.5337, lon:-98.4698, station:"KSAT", tz:"America/Chicago"}
 ];
 
-let rows = CITIES.map(c => ({...c, now: null, currentTime: "", days: [], n: 0, error: ""}));
+let rows = CITIES.map(c => ({
+  ...c,
+  modelNow: null,
+  modelTime: "",
+  obsTemp: null,
+  obsHigh: null,
+  obsLow: null,
+  obsTime: "",
+  days: [],
+  n: 0,
+  error: ""
+}));
 
 function ensembleUrl(c) {
   return `https://ensemble-api.open-meteo.com/v1/ensemble?latitude=${c.lat}&longitude=${c.lon}&hourly=temperature_2m&models=gfs_seamless&forecast_days=3&temperature_unit=fahrenheit&timezone=auto`;
 }
 
+function obsUrl(c) {
+  const end = new Date();
+  const start = new Date(end.getTime() - 36 * 60 * 60 * 1000);
+  return `https://api.weather.gov/stations/${c.station}/observations?start=${start.toISOString()}&end=${end.toISOString()}`;
+}
+
 function fmtTemp(t) {
   return (t === null || t === undefined || Number.isNaN(t)) ? "—" : `${Math.round(t)}°`;
+}
+
+function fmtOne(t) {
+  return (t === null || t === undefined || Number.isNaN(t)) ? "—" : `${t.toFixed(1)}°`;
+}
+
+function cToF(c) {
+  return c * 9 / 5 + 32;
 }
 
 function mean(vals) {
@@ -1498,6 +1547,35 @@ function percentile(vals, p) {
   const hi = Math.ceil(idx);
   if (lo === hi) return sorted[lo];
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+}
+
+function localYmd(isoTime, tz) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(new Date(isoTime));
+
+  const y = parts.find(p => p.type === "year")?.value;
+  const m = parts.find(p => p.type === "month")?.value;
+  const d = parts.find(p => p.type === "day")?.value;
+  return `${y}-${m}-${d}`;
+}
+
+function localTime(isoTime, tz) {
+  if (!isoTime) return "";
+  try {
+    return new Date(isoTime).toLocaleString(undefined, {
+      timeZone: tz,
+      month: "numeric",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit"
+    });
+  } catch {
+    return isoTime;
+  }
 }
 
 function dayLabel(isoDate, idx) {
@@ -1544,7 +1622,7 @@ function parseEnsemble(c, data) {
 
   const ni = nearestIndex(times);
   const nowVals = keys.map(k => hourly[k]?.[ni]).filter(v => v !== null && v !== undefined).map(Number);
-  const nowMean = mean(nowVals);
+  const modelNow = mean(nowVals);
 
   const grouped = {};
   times.forEach((t, i) => {
@@ -1586,35 +1664,100 @@ function parseEnsemble(c, data) {
 
   return {
     ...c,
-    now: nowMean,
-    currentTime: times[ni] || "",
+    modelNow,
+    modelTime: times[ni] || "",
     days,
     n: keys.length,
     error: ""
   };
 }
 
+function parseObserved(c, data) {
+  const features = data?.features || [];
+  const todayKey = localYmd(new Date().toISOString(), c.tz);
+  const obs = [];
+
+  for (const f of features) {
+    const p = f.properties || {};
+    const iso = p.timestamp;
+    const tempC = p.temperature?.value;
+    if (!iso || tempC === null || tempC === undefined) continue;
+
+    obs.push({
+      time: iso,
+      temp: cToF(Number(tempC)),
+      day: localYmd(iso, c.tz)
+    });
+  }
+
+  obs.sort((a, b) => new Date(b.time) - new Date(a.time));
+
+  const latest = obs[0] || null;
+  const todayObs = obs.filter(o => o.day === todayKey);
+
+  return {
+    obsTemp: latest ? latest.temp : null,
+    obsTime: latest ? latest.time : "",
+    obsHigh: todayObs.length ? Math.max(...todayObs.map(o => o.temp)) : null,
+    obsLow: todayObs.length ? Math.min(...todayObs.map(o => o.temp)) : null
+  };
+}
+
+function deltaText(r) {
+  if (r.modelNow === null || r.obsTemp === null) return "Delta: —";
+  const d = r.obsTemp - r.modelNow;
+  const sign = d >= 0 ? "+" : "";
+  return `Observed vs model: ${sign}${d.toFixed(1)}°`;
+}
+
+function deltaClass(r) {
+  if (r.modelNow === null || r.obsTemp === null) return "";
+  const d = r.obsTemp - r.modelNow;
+  if (d >= 1.5) return "delta-hot";
+  if (d <= -1.5) return "delta-cold";
+  return "";
+}
+
 function renderCards() {
   const mode = document.getElementById("sortMode").value;
   let sorted = [...rows];
 
-  if (mode === "now_desc") sorted.sort((a,b) => (b.now ?? -999) - (a.now ?? -999));
-  if (mode === "now_asc") sorted.sort((a,b) => (a.now ?? 999) - (b.now ?? 999));
+  const delta = r => (r.obsTemp ?? 0) - (r.modelNow ?? 0);
+  if (mode === "delta_desc") sorted.sort((a,b) => delta(b) - delta(a));
+  if (mode === "delta_asc") sorted.sort((a,b) => delta(a) - delta(b));
+  if (mode === "obs_desc") sorted.sort((a,b) => (b.obsTemp ?? -999) - (a.obsTemp ?? -999));
+  if (mode === "obs_asc") sorted.sort((a,b) => (a.obsTemp ?? 999) - (b.obsTemp ?? 999));
   if (mode === "today_high_desc") sorted.sort((a,b) => ((b.days?.[0]?.highMean) ?? -999) - ((a.days?.[0]?.highMean) ?? -999));
   if (mode === "code") sorted.sort((a,b) => a.code.localeCompare(b.code));
 
   document.getElementById("grid").innerHTML = sorted.map(r => `
     <div class="card">
       <div class="code">${r.code}</div>
-      <div class="name">${r.name}</div>
-      <div class="temp">${fmtTemp(r.now)}</div>
-      <div class="label">Model now · N=${r.n || "—"}</div>
+      <div class="name">${r.name} · ${r.station}</div>
+
+      <div class="temp">${fmtTemp(r.modelNow)}</div>
+      <div class="label">Forecasted now · N=${r.n || "—"}</div>
+
+      <div class="compare">
+        <div class="compare-row">
+          <span>Last observed</span>
+          <strong>${fmtTemp(r.obsTemp)}</strong>
+        </div>
+        <div class="compare-row">
+          <span>Observed today</span>
+          <strong>H ${fmtTemp(r.obsHigh)} / L ${fmtTemp(r.obsLow)}</strong>
+        </div>
+        <div class="compare-row ${deltaClass(r)}">
+          <span>${deltaText(r)}</span>
+          <strong></strong>
+        </div>
+      </div>
 
       <div class="forecast-block">
         ${(r.days || []).map(d => `
           <div class="forecast-row">
             ${d.label}
-            <strong>H ${fmtTemp(d.highMean)} / L ${fmtTemp(d.lowMean)}</strong>
+            <strong>Ens H ${fmtTemp(d.highMean)} / L ${fmtTemp(d.lowMean)}</strong>
             <div class="spread">
               High P10/P50/P90: ${fmtTemp(d.highP10)} / ${fmtTemp(d.highP50)} / ${fmtTemp(d.highP90)}
             </div>
@@ -1625,18 +1768,33 @@ function renderCards() {
         `).join("")}
       </div>
 
-      <div class="time">${r.currentTime ? "Nearest model hour: " + r.currentTime : ""}</div>
+      <div class="time">${r.modelTime ? "Nearest model hour: " + localTime(r.modelTime, r.tz) : ""}</div>
+      <div class="time">${r.obsTime ? "Last observed time: " + localTime(r.obsTime, r.tz) : ""}</div>
       ${r.error ? `<div class="error">${r.error}</div>` : ""}
-      <a href="${ensembleUrl(r)}" target="_blank" rel="noopener">Open raw ensemble data</a>
+      <a href="${ensembleUrl(r)}" target="_blank" rel="noopener">Raw ensemble</a>
+      <br>
+      <a href="${obsUrl(r)}" target="_blank" rel="noopener">Raw NWS observations</a>
     </div>
   `).join("");
 }
 
 async function fetchCity(c) {
-  const res = await fetch(ensembleUrl(c), {cache: "no-store"});
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
-  return parseEnsemble(c, data);
+  const [ensRes, obsRes] = await Promise.all([
+    fetch(ensembleUrl(c), {cache: "no-store"}),
+    fetch(obsUrl(c), {cache: "no-store"})
+  ]);
+
+  if (!ensRes.ok) throw new Error(`Ensemble HTTP ${ensRes.status}`);
+
+  const ensData = await ensRes.json();
+  const row = parseEnsemble(c, ensData);
+
+  if (obsRes.ok) {
+    const obsData = await obsRes.json();
+    return {...row, ...parseObserved(c, obsData)};
+  }
+
+  return {...row, error: `Obs HTTP ${obsRes.status}`};
 }
 
 async function loadTemps(manual=false) {
@@ -1648,7 +1806,18 @@ async function loadTemps(manual=false) {
     try {
       return await fetchCity(c);
     } catch (e) {
-      return {...c, now: null, currentTime: "", days: [], n: 0, error: String(e.message || e)};
+      return {
+        ...c,
+        modelNow: null,
+        modelTime: "",
+        obsTemp: null,
+        obsHigh: null,
+        obsLow: null,
+        obsTime: "",
+        days: [],
+        n: 0,
+        error: String(e.message || e)
+      };
     }
   }));
 

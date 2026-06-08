@@ -145,21 +145,21 @@ async def fetch_ensemble_forecast(city_key: str, target_date: Optional[date] = N
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            # Open-Meteo Ensemble API — lighter GEFS hourly request.
+            # Open-Meteo forecast API — lighter ECMWF hourly request.
             # This matches the working bot style: fetch hourly temperature_2m,
             # then derive high/low from the hourly forecast.
             params = {
                 "latitude": city["lat"],
                 "longitude": city["lon"],
                 "hourly": "temperature_2m",
-                "models": "gfs_seamless",
+                "models": "ecmwf_ifs025",
                 "forecast_days": 2,
                 "temperature_unit": "fahrenheit",
                 "timezone": "UTC",
             }
 
             response = await client.get(
-                "https://ensemble-api.open-meteo.com/v1/ensemble",
+                "https://api.open-meteo.com/v1/forecast",
                 params=params,
             )
             response.raise_for_status()
@@ -191,7 +191,7 @@ async def fetch_ensemble_forecast(city_key: str, target_date: Optional[date] = N
             _forecast_cache[cache_key] = (now, forecast)
             logger.info(f"Ensemble forecast for {city['name']} on {target_date}: "
                         f"High {forecast.mean_high:.1f}F +/- {forecast.std_high:.1f}F "
-                        f"({forecast.num_members} GEFS-derived sample(s))")
+                        f"({forecast.num_members} ECMWF-derived sample(s))")
 
             return forecast
 

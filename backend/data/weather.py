@@ -113,8 +113,8 @@ class EnsembleForecast:
 
 # Simple cache: (city_key, target_date_str) -> (timestamp, EnsembleForecast)
 _forecast_cache: Dict[str, tuple] = {}
-_CACHE_TTL = 300  # 5 minutes
-_FAILURE_CACHE_TTL = 300  # 5 minutes
+_CACHE_TTL = 3600  # 60 minutes
+_FAILURE_CACHE_TTL = 1800  # 30 minutes
 
 
 def _celsius_to_fahrenheit(c: float) -> float:

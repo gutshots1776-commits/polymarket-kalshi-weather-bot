@@ -24,15 +24,21 @@ class KalshiClient:
         self._private_key = None
 
     def _load_private_key(self):
-        """Load RSA private key from file (lazy, cached)."""
+        """Load RSA private key from env PEM text or file path (lazy, cached)."""
         if self._private_key is not None:
             return self._private_key
 
-        key_path = settings.KALSHI_PRIVATE_KEY_PATH
-        if not key_path:
-            raise ValueError("KALSHI_PRIVATE_KEY_PATH not configured")
+        pem_text = (settings.KALSHI_PRIVATE_KEY_PEM or "").strip()
+        if pem_text:
+            # Render env vars sometimes store literal \n sequences.
+            pem_text = pem_text.replace("\\n", "\n")
+            pem_data = pem_text.encode("utf-8")
+        else:
+            key_path = settings.KALSHI_PRIVATE_KEY_PATH
+            if not key_path:
+                raise ValueError("KALSHI_PRIVATE_KEY_PEM or KALSHI_PRIVATE_KEY_PATH not configured")
+            pem_data = Path(key_path).expanduser().read_bytes()
 
-        pem_data = Path(key_path).expanduser().read_bytes()
         self._private_key = serialization.load_pem_private_key(pem_data, password=None)
         return self._private_key
 
@@ -95,4 +101,7 @@ class KalshiClient:
 
 def kalshi_credentials_present() -> bool:
     """Check if Kalshi API credentials are configured."""
-    return bool(settings.KALSHI_API_KEY_ID and settings.KALSHI_PRIVATE_KEY_PATH)
+    return bool(
+        settings.KALSHI_API_KEY_ID
+        and (settings.KALSHI_PRIVATE_KEY_PEM or settings.KALSHI_PRIVATE_KEY_PATH)
+    )

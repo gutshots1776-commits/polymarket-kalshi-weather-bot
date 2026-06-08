@@ -2856,7 +2856,7 @@ function render() {
         </div>
 
         <div class="big-temp">${fmtTemp(obsValue)}</div>
-        <div class="obs-code">${lead ? fmtNum(lead.volume) : ""}</div>
+        <div class="obs-code">Current observed: ${fmtTemp(c.obs?.obsTemp)}${c.obs?.obsTime ? " at " + localTime(c.obs.obsTime, c.tz) : ""}</div>
 
         <div class="airline">📊 ${observedLabel}: ${fmtTemp(obsValue)}${obsTime ? " at " + localTime(obsTime, c.tz) : ""} ✅</div>
 
@@ -2875,7 +2875,7 @@ function render() {
           <div class="small-row"><span>Observed time</span><strong>${obsTime ? localTime(obsTime, c.tz) : "—"}</strong></div>
           <div class="small-row"><span>Leader YES bid / ask</span><strong>${lead ? pricePair(lead) : "—"}</strong></div>
           <div class="small-row"><span>Contender YES bid / ask</span><strong>${cont ? pricePair(cont) : "—"}</strong></div>
-          <div class="small-row"><span>Leader volume</span><strong>${lead ? fmtNum(lead.volume) : "—"}</strong></div>
+          <div class="small-row"><span>Current observed temp</span><strong>${fmtTemp(c.obs?.obsTemp)}${c.obs?.obsTime ? " at " + localTime(c.obs.obsTime, c.tz) : ""}</strong></div>
         </div>
 
         ${m.error ? `<div class="error">${m.error}</div>` : ""}

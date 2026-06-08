@@ -3025,3 +3025,59 @@ setInterval(() => loadBoard(false), 5 * 60 * 1000);
 async def market_board_dashboard():
     return HTMLResponse(MARKET_BOARD_DASHBOARD_HTML)
 
+@app.get("/api/debug/kalshi-series/{series_ticker}")
+async def debug_kalshi_series(series_ticker: str):
+    """
+    Debug endpoint to inspect raw Kalshi market fields for one series.
+    Use this to see the exact bid/ask field names returned by Kalshi.
+    """
+    from backend.data.kalshi_client import KalshiClient, kalshi_credentials_present
+
+    if not kalshi_credentials_present():
+        return {
+            "ok": False,
+            "error": "Kalshi credentials are not configured on this service.",
+        }
+
+    client = KalshiClient()
+
+    data = await client.get_markets({
+        "series_ticker": series_ticker,
+        "status": "open",
+        "limit": 10,
+    })
+
+    markets = data.get("markets", []) or []
+
+    samples = []
+    for m in markets[:6]:
+        samples.append({
+            "ticker": m.get("ticker"),
+            "title": m.get("title"),
+            "subtitle": m.get("subtitle"),
+            "yes_bid": m.get("yes_bid"),
+            "yes_ask": m.get("yes_ask"),
+            "no_bid": m.get("no_bid"),
+            "no_ask": m.get("no_ask"),
+            "last_price": m.get("last_price"),
+            "open_interest": m.get("open_interest"),
+            "volume": m.get("volume"),
+            "liquidity": m.get("liquidity"),
+            "price_keys_present": sorted([
+                k for k in m.keys()
+                if "price" in k.lower()
+                or "bid" in k.lower()
+                or "ask" in k.lower()
+                or "volume" in k.lower()
+                or "liquidity" in k.lower()
+            ]),
+            "all_keys": sorted(list(m.keys())),
+        })
+
+    return {
+        "ok": True,
+        "series_ticker": series_ticker,
+        "count": len(markets),
+        "samples": samples,
+    }
+

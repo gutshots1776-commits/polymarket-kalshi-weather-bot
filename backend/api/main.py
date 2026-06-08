@@ -1911,3 +1911,166 @@ setInterval(() => loadTemps(false), 60 * 60 * 1000);
 async def ensemble_temps_dashboard():
     return HTMLResponse(ENSEMBLE_TEMPS_DASHBOARD_HTML)
 
+KALSHI_TEMP_SERIES_CANDIDATES = {
+    "atl": {
+        "name": "Atlanta", "station": "KATL",
+        "high": ["KXHIGHTATL", "KXHIGHATL"],
+        "low": ["KXLOWTATL", "KXLOWATL"],
+    },
+    "aus": {
+        "name": "Austin", "station": "KAUS",
+        "high": ["KXHIGHAUS", "KXHIGHTAUS"],
+        "low": ["KXLOWAUS", "KXLOWTAUS"],
+    },
+    "bos": {
+        "name": "Boston", "station": "KBOS",
+        "high": ["KXHIGHTBOS", "KXHIGHBOS"],
+        "low": ["KXLOWTBOS", "KXLOWBOS"],
+    },
+    "chicago": {
+        "name": "Chicago", "station": "KMDW",
+        "high": ["KXHIGHCHI", "KXHIGHTCHI"],
+        "low": ["KXLOWCHI", "KXLOWTCHI"],
+    },
+    "dal": {
+        "name": "Dallas", "station": "KDAL",
+        "high": ["KXHIGHTDAL", "KXHIGHDAL"],
+        "low": ["KXLOWTDAL", "KXLOWDAL"],
+    },
+    "dc": {
+        "name": "Washington DC", "station": "KDCA",
+        "high": ["KXHIGHTDC", "KXHIGHDC"],
+        "low": ["KXLOWTDC", "KXLOWDC"],
+    },
+    "denver": {
+        "name": "Denver", "station": "KDEN",
+        "high": ["KXHIGHDEN", "KXHIGHTEMPDEN", "KXHIGHTDEN"],
+        "low": ["KXLOWDEN", "KXLOWTDEN"],
+    },
+    "hou": {
+        "name": "Houston", "station": "KHOU",
+        "high": ["KXHIGHHOU", "KXHIGHTHOU"],
+        "low": ["KXLOWTHOU", "KXLOWHOU"],
+    },
+    "los_angeles": {
+        "name": "Los Angeles", "station": "KLAX",
+        "high": ["KXHIGHLAX", "KXHIGHLA", "KXHIGHTLA"],
+        "low": ["KXLOWLAX", "KXLOWTLAX", "KXLOWLA"],
+    },
+    "lv": {
+        "name": "Las Vegas", "station": "KLAS",
+        "high": ["KXHIGHTLV", "KXHIGHLV"],
+        "low": ["KXLOWTLV", "KXLOWLV"],
+    },
+    "miami": {
+        "name": "Miami", "station": "KMIA",
+        "high": ["KXHIGHMIA", "KXHIGHTMIA"],
+        "low": ["KXLOWMIA", "KXLOWTMIA"],
+    },
+    "min": {
+        "name": "Minneapolis", "station": "KMSP",
+        "high": ["KXHIGHTMIN", "KXHIGHMIN"],
+        "low": ["KXLOWTMIN", "KXLOWMIN"],
+    },
+    "nola": {
+        "name": "New Orleans", "station": "KMSY",
+        "high": ["KXHIGHTNOLA", "KXHIGHNOLA"],
+        "low": ["KXLOWTNOLA", "KXLOWNOLA"],
+    },
+    "nyc": {
+        "name": "New York City", "station": "KNYC",
+        "high": ["KXHIGHNY", "KXHIGHNYC", "KXHIGHNY0", "KXHIGHNYD", "KXHIGHTNY", "KXHIGHTNYC"],
+        "low": ["KXLOWNY", "KXLOWNYC", "KXLOWTNY", "KXLOWTNYC"],
+    },
+    "okc": {
+        "name": "Oklahoma City", "station": "KOKC",
+        "high": ["KXHIGHTOKC", "KXHIGHOKC"],
+        "low": ["KXLOWTOKC", "KXLOWOKC"],
+    },
+    "phi": {
+        "name": "Philadelphia", "station": "KPHL",
+        "high": ["KXHIGHPHI", "KXHIGHPHIL", "KXHIGHTPHI", "KXHIGHTPHIL"],
+        "low": ["KXLOWPHI", "KXLOWPHIL", "KXLOWTPHI", "KXLOWTPHIL"],
+    },
+    "phx": {
+        "name": "Phoenix", "station": "KPHX",
+        "high": ["KXHIGHTPHX", "KXHIGHPHX"],
+        "low": ["KXLOWTPHX", "KXLOWPHX"],
+    },
+    "satx": {
+        "name": "San Antonio", "station": "KSAT",
+        "high": ["KXHIGHTSATX", "KXHIGHSATX"],
+        "low": ["KXLOWTSATX", "KXLOWSATX"],
+    },
+    "sea": {
+        "name": "Seattle", "station": "KSEA",
+        "high": ["KXHIGHSEA", "KXHIGHTSEA"],
+        "low": ["KXLOWSEA", "KXLOWTSEA"],
+    },
+    "sf": {
+        "name": "San Francisco", "station": "KSFO",
+        "high": ["KXHIGHSF", "KXHIGHTSFO", "KXHIGHSFO"],
+        "low": ["KXLOWSF", "KXLOWSFO", "KXLOWTSF", "KXLOWTSFO"],
+    },
+}
+
+
+@app.get("/api/kalshi/series-discovery")
+async def kalshi_series_discovery():
+    """
+    Test possible Kalshi temperature series tickers and report which ones currently return open markets.
+    This uses Render's Kalshi credentials, not the browser's.
+    """
+    from backend.data.kalshi_client import KalshiClient, kalshi_credentials_present
+
+    if not kalshi_credentials_present():
+        return {
+            "ok": False,
+            "error": "Kalshi credentials are not configured on this service.",
+            "cities": {},
+        }
+
+    client = KalshiClient()
+    output = {
+        "ok": True,
+        "note": "Series with open_count > 0 are the active candidates to use for the market board.",
+        "cities": {},
+    }
+
+    for city_key, cfg in KALSHI_TEMP_SERIES_CANDIDATES.items():
+        city_result = {
+            "name": cfg["name"],
+            "station": cfg["station"],
+            "high": [],
+            "low": [],
+        }
+
+        for market_type in ("high", "low"):
+            for series in cfg[market_type]:
+                item = {
+                    "series": series,
+                    "open_count": 0,
+                    "sample_tickers": [],
+                    "sample_titles": [],
+                    "error": None,
+                }
+
+                try:
+                    data = await client.get_markets({
+                        "series_ticker": series,
+                        "status": "open",
+                        "limit": 10,
+                    })
+                    markets = data.get("markets", []) or []
+                    item["open_count"] = len(markets)
+                    item["sample_tickers"] = [m.get("ticker") for m in markets[:5]]
+                    item["sample_titles"] = [m.get("title") for m in markets[:3]]
+                except Exception as e:
+                    item["error"] = str(e)
+
+                city_result[market_type].append(item)
+
+        output["cities"][city_key] = city_result
+
+    return output
+

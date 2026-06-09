@@ -18,7 +18,7 @@ CITIES = [
     {"key":"aus", "name":"Austin", "station":"KAUS", "cli_pil":"CLIAUS", "lat":30.1975, "lon":-97.6664, "tz":"America/Chicago"},
     {"key":"bos", "name":"Boston", "station":"KBOS", "cli_pil":"CLIBOS", "lat":42.3656, "lon":-71.0096, "tz":"America/New_York"},
     {"key":"chicago", "name":"Chicago", "station":"KMDW", "cli_pil":"CLIMDW", "lat":41.7868, "lon":-87.7522, "tz":"America/Chicago"},
-    {"key":"dal", "name":"Dallas", "station":"KDAL", "cli_pil":"CLIDAL", "lat":32.8471, "lon":-96.8518, "tz":"America/Chicago"},
+    {"key":"dal", "name":"Dallas/Fort Worth", "station":"KDFW", "cli_pil":"CLIDFW", "lat":32.8998, "lon":-97.0403, "tz":"America/Chicago"},
     {"key":"dc", "name":"Washington DC", "station":"KDCA", "cli_pil":"CLIDCA", "lat":38.8512, "lon":-77.0402, "tz":"America/New_York"},
     {"key":"denver", "name":"Denver", "station":"KDEN", "cli_pil":"CLIDEN", "lat":39.8561, "lon":-104.6737, "tz":"America/Denver"},
     {"key":"hou", "name":"Houston", "station":"KHOU", "cli_pil":"CLIHOU", "lat":29.6454, "lon":-95.2789, "tz":"America/Chicago"},

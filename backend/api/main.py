@@ -2489,6 +2489,52 @@ async def _wx_fetch_market_forecast(city_key: str, tz_name: str) -> dict:
             "error": str(e),
         }
 
+
+
+@app.get("/api/forecast-accuracy")
+def api_forecast_accuracy():
+    """
+    Return cached 30-day forecast accuracy summary.
+
+    Cache is built by:
+      python tools/build_forecast_accuracy_cache.py
+    """
+    import json
+    from pathlib import Path
+    from datetime import datetime, timezone
+
+    cache_path = Path("state/forecast_accuracy_summary.json")
+
+    if not cache_path.exists():
+        return {
+            "ok": False,
+            "error": "forecast accuracy cache not found",
+            "hint": "Run: python tools/build_forecast_accuracy_cache.py",
+            "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "cities": {},
+        }
+
+    try:
+        data = json.loads(cache_path.read_text())
+    except Exception as e:
+        return {
+            "ok": False,
+            "error": f"could not read forecast accuracy cache: {e}",
+            "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "cities": {},
+        }
+
+    if isinstance(data, dict):
+        data["ok"] = True
+        return data
+
+    return {
+        "ok": False,
+        "error": "forecast accuracy cache had unexpected format",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "cities": {},
+    }
+
 @app.get("/api/kalshi/market-board")
 async def kalshi_market_board():
     from datetime import datetime, timezone

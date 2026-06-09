@@ -3273,6 +3273,9 @@ function render() {
           <div class="small-row"><span>Leader YES bid / ask</span><strong>${lead ? pricePair(lead) : "—"}</strong></div>
           <div class="small-row"><span>Contender YES bid / ask</span><strong>${cont ? pricePair(cont) : "—"}</strong></div>
           <div class="small-row"><span>Current observed temp</span><strong>${fmtTemp(c.obs?.obsTemp)}${c.obs?.obsTime ? " at " + localTime(c.obs.obsTime, c.tz) : ""}</strong></div>
+            <div class="small-row"><span>Forecast Accuracy</span><strong>collecting data</strong></div>
+            <div class="small-row"><span>Yesterday forecast</span><strong>waiting for saved snapshot</strong></div>
+            <div class="small-row"><span>7-day avg miss</span><strong>collecting data</strong></div>
         </div>
 
         ${m.error ? `<div class="error">${m.error}</div>` : ""}

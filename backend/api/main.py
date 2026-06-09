@@ -1546,7 +1546,7 @@ let rows = CITIES.map(c => ({
 }));
 
 function ensembleUrl(c) {
-  return `https://ensemble-api.open-meteo.com/v1/ensemble?latitude=${c.lat}&longitude=${c.lon}&hourly=temperature_2m&models=gfs_seamless&forecast_days=3&temperature_unit=fahrenheit&timezone=auto`;
+  return `https://ensemble-api.open-meteo.com/v1/ensemble?latitude=${c.lat}&longitude=${c.lon}&hourly=temperature_2m&models=gfs_seamless&forecast_days=3&temperature_unit=fahrenheit&timezone=UTC`;
 }
 
 function obsUrl(c) {
@@ -2562,7 +2562,19 @@ async def kalshi_market_board():
             },
         }
 
-        city_out["forecast"] = await _wx_fetch_market_forecast(city_key, cfg.get("tz", "UTC"))
+        coords_for_city = _WX_MARKET_COORDS.get(city_key, {})
+        city_out["lat"] = coords_for_city.get("lat")
+        city_out["lon"] = coords_for_city.get("lon")
+
+        # Live forecasts are fetched by the browser/phone IP to avoid Render/Open-Meteo 429s.
+        city_out["forecast"] = {
+            "high": None,
+            "high_time": "",
+            "low": None,
+            "low_time": "",
+            "members": 0,
+            "source": "browser",
+        }
 
         for market_type in ("high", "low"):
             series = cfg[market_type]
@@ -3246,6 +3258,86 @@ function bucketRow(b, idx, obsLead) {
     </div>
   `;
 }
+
+function emptyMarketForecast(reason="") {
+  return {
+    high: null,
+    high_time: "",
+    low: null,
+    low_time: "",
+    members: 0,
+    error: reason
+  };
+}
+
+function parseMarketForecast(c, data) {
+  const hourly = data?.hourly || {};
+  const times = hourly.time || [];
+  const keys = tempKeys(hourly);
+
+  if (!times.length || !keys.length) {
+    return emptyMarketForecast("No forecast temps returned");
+  }
+
+  const todayYmd = localYmd(new Date().toISOString(), c.tz);
+  let high = null;
+  let low = null;
+  let highTime = "";
+  let lowTime = "";
+  let maxMembers = 0;
+
+  times.forEach((t, i) => {
+    if (localYmd(t, c.tz) !== todayYmd) return;
+
+    const vals = keys
+      .map(k => hourly[k]?.[i])
+      .filter(v => v !== null && v !== undefined && !Number.isNaN(Number(v)))
+      .map(Number);
+
+    if (!vals.length) return;
+
+    maxMembers = Math.max(maxMembers, vals.length);
+    const avg = mean(vals);
+
+    if (avg === null || Number.isNaN(avg)) return;
+
+    if (high === null || avg > high) {
+      high = avg;
+      highTime = t;
+    }
+
+    if (low === null || avg < low) {
+      low = avg;
+      lowTime = t;
+    }
+  });
+
+  return {
+    high: high === null ? null : Math.round(high),
+    high_time: highTime,
+    low: low === null ? null : Math.round(low),
+    low_time: lowTime,
+    members: maxMembers,
+    source: "browser"
+  };
+}
+
+async function fetchMarketForecast(c) {
+  if (!c.lat || !c.lon) {
+    return emptyMarketForecast("Missing city coordinates");
+  }
+
+  const res = await fetch(ensembleUrl(c), {cache:"no-store"});
+
+  if (!res.ok) {
+    return emptyMarketForecast(`Ensemble HTTP ${res.status}`);
+  }
+
+  const data = await res.json();
+  return parseMarketForecast(c, data);
+}
+
+
 function render() {
   const mode = document.getElementById("sortMode").value;
   let rows = [...board];
@@ -3347,14 +3439,24 @@ async function loadBoard(manual=false) {
   }
 
   const rows = await Promise.all((data.cities || []).map(async c => {
+    let obs = {};
+    let forecast = c.forecast || emptyMarketForecast();
+
     try {
       const obsRes = await fetch(obsUrl(c), {cache:"no-store"});
       if (obsRes.ok) {
         const obsData = await obsRes.json();
-        return {...c, obs: parseObs(c, obsData)};
+        obs = parseObs(c, obsData);
       }
     } catch {}
-    return {...c, obs: {}};
+
+    try {
+      forecast = await fetchMarketForecast(c);
+    } catch (e) {
+      forecast = emptyMarketForecast(String(e.message || e));
+    }
+
+    return {...c, obs, forecast};
   }));
 
   board = rows;

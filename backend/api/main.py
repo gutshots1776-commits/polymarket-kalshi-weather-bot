@@ -3012,6 +3012,43 @@ function kalshiMarketUrl(ticker) {
   if (!ticker) return "https://kalshi.com/markets";
   return `https://kalshi.com/markets/${ticker}`;
 }
+  const WX_PRODUCT_CODES = {
+    atl:{cli:"ATL", dsm:"FFC"},
+    aus:{cli:"AUS", dsm:"EWX"},
+    bos:{cli:"BOS", dsm:"BOX"},
+    chicago:{cli:"MDW", dsm:"LOT"},
+    dal:{cli:"DAL", dsm:"FWD"},
+    dc:{cli:"DCA", dsm:"LWX"},
+    denver:{cli:"DEN", dsm:"BOU"},
+    hou:{cli:"HOU", dsm:"HGX"},
+    los_angeles:{cli:"LAX", dsm:"LOX"},
+    lv:{cli:"LAS", dsm:"VEF"},
+    miami:{cli:"MIA", dsm:"MFL"},
+    min:{cli:"MSP", dsm:"MPX"},
+    nola:{cli:"MSY", dsm:"LIX"},
+    nyc:{cli:"NYC", dsm:"OKX"},
+    okc:{cli:"OKC", dsm:"OUN"},
+    phi:{cli:"PHL", dsm:"PHI"},
+    phx:{cli:"PHX", dsm:"PSR"},
+    satx:{cli:"SAT", dsm:"EWX"},
+    sea:{cli:"SEA", dsm:"SEW"},
+    sf:{cli:"SFO", dsm:"MTR"}
+  };
+
+  function metarUrl(c) {
+    const station = encodeURIComponent(c.station || "");
+    return `https://portal-dev.accuweather.com/metar?station=${station}&hours=48&metartype=all`;
+  }
+
+  function cliUrl(c) {
+    const code = WX_PRODUCT_CODES[c.city_key]?.cli || (c.station || "").replace(/^K/, "");
+    return `https://forecast.weather.gov/product.php?site=NWS&product=CLI&issuedby=${encodeURIComponent(code)}`;
+  }
+
+  function dsmUrl(c) {
+    const code = WX_PRODUCT_CODES[c.city_key]?.dsm || (c.station || "").replace(/^K/, "");
+    return `https://forecast.weather.gov/product.php?site=NWS&product=DSM&issuedby=${encodeURIComponent(code)}`;
+  }
   function metarUrl(c) {
     const station = encodeURIComponent(c.station || "");
     return `https://portal-dev.accuweather.com/metar?station=${station}&hours=48&metartype=all`;
@@ -3241,6 +3278,8 @@ function render() {
         ${m.error ? `<div class="error">${m.error}</div>` : ""}
 
         <a class="kalshi-link" href="${kalshiMarketUrl(lead?.ticker)}" target="_blank" rel="noopener">🔗 Trade on Kalshi</a>
+        <a class="kalshi-link" href="${cliUrl(c)}" target="_blank" rel="noopener">🌡️ NWS CLI</a>
+        <a class="kalshi-link" href="${dsmUrl(c)}" target="_blank" rel="noopener">📈 NWS DSM</a>
         <a class="kalshi-link" href="${metarUrl(c)}" target="_blank" rel="noopener">🧾 Hourly METAR</a>
       </div>
     `;

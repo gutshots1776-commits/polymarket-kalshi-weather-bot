@@ -1647,7 +1647,7 @@ function nearestIndex(times) {
 function parseEnsemble(c, data) {
   const hourly = data.hourly || {};
   const times = hourly.time || [];
-  const keys = tempKeys(hourly);
+  const keys = marketTempKeys(hourly);
 
   if (!times.length || !keys.length) {
     throw new Error("No ensemble hourly temps returned");
@@ -3259,6 +3259,34 @@ function bucketRow(b, idx, obsLead) {
   `;
 }
 
+
+function marketEnsembleUrl(c) {
+  return `https://ensemble-api.open-meteo.com/v1/ensemble?latitude=${c.lat}&longitude=${c.lon}&hourly=temperature_2m&models=gfs_seamless&forecast_days=3&temperature_unit=fahrenheit&timezone=UTC`;
+}
+
+function marketTempKeys(hourly) {
+  return Object.keys(hourly || {}).filter(k => k === "temperature_2m" || k.startsWith("temperature_2m_member"));
+}
+
+function marketMean(vals) {
+  if (!vals.length) return null;
+  return vals.reduce((a,b) => a+b, 0) / vals.length;
+}
+
+function marketLocalYmd(isoTime, tz) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(new Date(isoTime));
+
+  const y = parts.find(p => p.type === "year")?.value;
+  const m = parts.find(p => p.type === "month")?.value;
+  const d = parts.find(p => p.type === "day")?.value;
+  return `${y}-${m}-${d}`;
+}
+
 function emptyMarketForecast(reason="") {
   return {
     high: null,
@@ -3273,13 +3301,13 @@ function emptyMarketForecast(reason="") {
 function parseMarketForecast(c, data) {
   const hourly = data?.hourly || {};
   const times = hourly.time || [];
-  const keys = tempKeys(hourly);
+  const keys = marketTempKeys(hourly);
 
   if (!times.length || !keys.length) {
     return emptyMarketForecast("No forecast temps returned");
   }
 
-  const todayYmd = localYmd(new Date().toISOString(), c.tz);
+  const todayYmd = marketLocalYmd(new Date().toISOString(), c.tz);
   let high = null;
   let low = null;
   let highTime = "";
@@ -3287,7 +3315,7 @@ function parseMarketForecast(c, data) {
   let maxMembers = 0;
 
   times.forEach((t, i) => {
-    if (localYmd(t, c.tz) !== todayYmd) return;
+    if (marketLocalYmd(t, c.tz) !== todayYmd) return;
 
     const vals = keys
       .map(k => hourly[k]?.[i])
@@ -3297,7 +3325,7 @@ function parseMarketForecast(c, data) {
     if (!vals.length) return;
 
     maxMembers = Math.max(maxMembers, vals.length);
-    const avg = mean(vals);
+    const avg = marketMean(vals);
 
     if (avg === null || Number.isNaN(avg)) return;
 
@@ -3327,7 +3355,7 @@ async function fetchMarketForecast(c) {
     return emptyMarketForecast("Missing city coordinates");
   }
 
-  const res = await fetch(ensembleUrl(c), {cache:"no-store"});
+  const res = await fetch(marketEnsembleUrl(c), {cache:"no-store"});
 
   if (!res.ok) {
     return emptyMarketForecast(`Ensemble HTTP ${res.status}`);

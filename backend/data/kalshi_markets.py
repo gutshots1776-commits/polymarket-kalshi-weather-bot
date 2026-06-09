@@ -77,6 +77,67 @@ def _parse_kalshi_ticker(ticker: str, city_key: str) -> Optional[dict]:
     }
 
 
+def _kalshi_cents(value):
+    """Convert Kalshi price fields to cents. Handles 66, "66", 0.66, or "0.66"."""
+    try:
+        if value is None:
+            return None
+        x = float(value)
+        if x <= 1.0:
+            x *= 100.0
+        return x
+    except Exception:
+        return None
+
+
+def _kalshi_price_bundle(m: dict) -> dict:
+    """Return usable YES/NO bid/ask/last in cents from Kalshi market payload."""
+    yes_bid = _kalshi_cents(m.get("yes_bid_dollars"))
+    yes_ask = _kalshi_cents(m.get("yes_ask_dollars"))
+    no_bid = _kalshi_cents(m.get("no_bid_dollars"))
+    no_ask = _kalshi_cents(m.get("no_ask_dollars"))
+    last_price = _kalshi_cents(m.get("last_price_dollars"))
+
+    if yes_bid is None:
+        yes_bid = _kalshi_cents(m.get("yes_bid"))
+    if yes_ask is None:
+        yes_ask = _kalshi_cents(m.get("yes_ask"))
+    if no_bid is None:
+        no_bid = _kalshi_cents(m.get("no_bid"))
+    if no_ask is None:
+        no_ask = _kalshi_cents(m.get("no_ask"))
+    if last_price is None:
+        last_price = _kalshi_cents(m.get("last_price"))
+
+    # Derive opposite side when Kalshi only gives one side.
+    if yes_ask is None and no_bid is not None:
+        yes_ask = max(0.0, 100.0 - no_bid)
+    if yes_bid is None and no_ask is not None:
+        yes_bid = max(0.0, 100.0 - no_ask)
+    if no_ask is None and yes_bid is not None:
+        no_ask = max(0.0, 100.0 - yes_bid)
+    if no_bid is None and yes_ask is not None:
+        no_bid = max(0.0, 100.0 - yes_ask)
+
+    # Last trade fallback.
+    if yes_ask is None and last_price is not None:
+        yes_ask = last_price
+    if yes_bid is None and last_price is not None:
+        yes_bid = last_price
+    if no_ask is None and last_price is not None:
+        no_ask = max(0.0, 100.0 - last_price)
+    if no_bid is None and last_price is not None:
+        no_bid = max(0.0, 100.0 - last_price)
+
+    return {
+        "yes_bid": yes_bid,
+        "yes_ask": yes_ask,
+        "no_bid": no_bid,
+        "no_ask": no_ask,
+        "last_price": last_price,
+    }
+
+
 async def fetch_kalshi_weather_markets(
     city_keys: Optional[List[str]] = None,
 ) -> List[WeatherMarket]:
@@ -116,44 +177,56 @@ async def fetch_kalshi_weather_markets(
                 data = await client.get_markets(params)
                 raw_markets = data.get("markets", [])
 
+                debug_raw = len(raw_markets)
+                debug_parse_fail = 0
+                debug_old_date = 0
+                debug_price_missing = 0
+                debug_bad_price = 0
+                debug_added = 0
+                debug_samples = []
+
                 for m in raw_markets:
                     ticker = m.get("ticker", "")
                     parsed = _parse_kalshi_ticker(ticker, city_key)
                     if not parsed:
+                        debug_parse_fail += 1
+                        if len(debug_samples) < 5:
+                            debug_samples.append(f"parse_fail ticker={ticker} title={m.get('title')}")
                         continue
 
                     if parsed["target_date"] < today:
+                        debug_old_date += 1
+                        if len(debug_samples) < 5:
+                            debug_samples.append(f"old_date ticker={ticker} date={parsed['target_date']}")
                         continue
 
-                    # Use real Kalshi prices only. Do NOT assume 50c when prices are missing.
-                    yes_ask = m.get("yes_ask")
-                    yes_bid = m.get("yes_bid")
-                    no_ask = m.get("no_ask")
-                    no_bid = m.get("no_bid")
-                    last_price = m.get("last_price")
+                    # Use real Kalshi prices only. Read both *_dollars and legacy cent fields.
+                    px = _kalshi_price_bundle(m)
 
-                    if yes_ask is not None:
-                        yes_price = float(yes_ask) / 100.0
-                    elif yes_bid is not None:
-                        yes_price = float(yes_bid) / 100.0
-                    elif last_price is not None:
-                        yes_price = float(last_price) / 100.0
-                    else:
-                        # No real tradable/implied price available.
+                    yes_cents = px.get("yes_ask") or px.get("yes_bid") or px.get("last_price")
+                    no_cents = px.get("no_ask") or px.get("no_bid")
+
+                    if yes_cents is None:
+                        debug_price_missing += 1
+                        if len(debug_samples) < 5:
+                            debug_samples.append(f"price_missing ticker={ticker} keys={sorted([k for k in m.keys() if 'price' in k.lower() or 'bid' in k.lower() or 'ask' in k.lower() or 'dollar' in k.lower()])}")
                         continue
+                    if no_cents is None:
+                        no_cents = max(0.0, 100.0 - float(yes_cents))
 
-                    if no_ask is not None:
-                        no_price = float(no_ask) / 100.0
-                    elif no_bid is not None:
-                        no_price = float(no_bid) / 100.0
-                    else:
-                        no_price = 1.0 - yes_price
+                    yes_price = float(yes_cents) / 100.0
+                    no_price = float(no_cents) / 100.0
 
-                    # Skip fully resolved, bad, or missing prices.
-                    if yes_price > 0.98 or yes_price < 0.02:
+                    # Skip only broken prices. Do not drop normal low/high bucket markets.
+                    if yes_price <= 0 or yes_price >= 1 or no_price <= 0 or no_price >= 1:
+                        debug_bad_price += 1
+                        if len(debug_samples) < 5:
+                            debug_samples.append(f"bad_price ticker={ticker} yes={yes_price} no={no_price}")
                         continue
 
                     volume = float(m.get("volume", 0) or 0)
+
+                    debug_added += 1
 
                     markets.append(WeatherMarket(
                         slug=ticker,
@@ -170,6 +243,12 @@ async def fetch_kalshi_weather_markets(
                         no_price=no_price,
                         volume=volume,
                     ))
+
+                logger.info(
+                    "Kalshi parse debug %s %s: raw=%s added=%s parse_fail=%s old_date=%s price_missing=%s bad_price=%s samples=%s",
+                    city_key, series, debug_raw, debug_added, debug_parse_fail, debug_old_date,
+                    debug_price_missing, debug_bad_price, debug_samples
+                )
 
                 # Handle pagination
                 cursor = data.get("cursor")

@@ -2360,6 +2360,135 @@ def _wx_select_single_market_date(buckets: list) -> list:
     return grouped[best_date]
 
 
+
+_WX_MARKET_FORECAST_CACHE = {}
+
+_WX_MARKET_COORDS = {
+    "atl": {"lat": 33.6407, "lon": -84.4277},
+    "aus": {"lat": 30.1975, "lon": -97.6664},
+    "bos": {"lat": 42.3656, "lon": -71.0096},
+    "chicago": {"lat": 41.7868, "lon": -87.7522},
+    "dal": {"lat": 32.8471, "lon": -96.8518},
+    "dc": {"lat": 38.8512, "lon": -77.0402},
+    "denver": {"lat": 39.8561, "lon": -104.6737},
+    "hou": {"lat": 29.6454, "lon": -95.2789},
+    "los_angeles": {"lat": 33.9425, "lon": -118.4081},
+    "lv": {"lat": 36.0801, "lon": -115.1522},
+    "miami": {"lat": 25.7959, "lon": -80.2870},
+    "min": {"lat": 44.8848, "lon": -93.2223},
+    "nola": {"lat": 29.9934, "lon": -90.2580},
+    "nyc": {"lat": 40.7828, "lon": -73.9653},
+    "okc": {"lat": 35.3931, "lon": -97.6007},
+    "phi": {"lat": 39.8719, "lon": -75.2411},
+    "phx": {"lat": 33.4342, "lon": -112.0116},
+    "satx": {"lat": 29.5337, "lon": -98.4698},
+    "sea": {"lat": 47.4502, "lon": -122.3088},
+    "sf": {"lat": 37.6213, "lon": -122.3790},
+}
+
+
+def _wx_mean(vals):
+    nums = []
+    for v in vals:
+        try:
+            if v is not None:
+                nums.append(float(v))
+        except Exception:
+            pass
+    if not nums:
+        return None
+    return sum(nums) / len(nums)
+
+
+async def _wx_fetch_market_forecast(city_key: str, tz_name: str) -> dict:
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+    import httpx
+
+    coords = _WX_MARKET_COORDS.get(city_key)
+    if not coords:
+        return {}
+
+    cache_key = f"{city_key}:{tz_name}"
+    now_ts = datetime.now(timezone.utc).timestamp()
+
+    cached = _WX_MARKET_FORECAST_CACHE.get(cache_key)
+    if cached and now_ts - cached.get("ts", 0) < 600:
+        return cached.get("data", {})
+
+    try:
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        tz = ZoneInfo("UTC")
+
+    today_local = datetime.now(tz).date()
+
+    params = {
+        "latitude": coords["lat"],
+        "longitude": coords["lon"],
+        "hourly": "temperature_2m",
+        "models": "gfs_seamless",
+        "forecast_days": 2,
+        "temperature_unit": "fahrenheit",
+        "timezone": "UTC",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=12.0) as client:
+            r = await client.get("https://ensemble-api.open-meteo.com/v1/ensemble", params=params)
+            r.raise_for_status()
+            data = r.json()
+
+        hourly = data.get("hourly", {}) or {}
+        times = hourly.get("time", []) or []
+        keys = [
+            k for k in hourly.keys()
+            if k == "temperature_2m" or k.startswith("temperature_2m_member")
+        ]
+
+        best_high = None
+        best_low = None
+
+        for i, t in enumerate(times):
+            try:
+                dt_utc = datetime.fromisoformat(str(t).replace("Z", "")).replace(tzinfo=timezone.utc)
+                dt_local = dt_utc.astimezone(tz)
+            except Exception:
+                continue
+
+            if dt_local.date() != today_local:
+                continue
+
+            avg = _wx_mean([hourly.get(k, [None] * len(times))[i] for k in keys])
+            if avg is None:
+                continue
+
+            if best_high is None or avg > best_high["temp"]:
+                best_high = {"temp": avg, "time": dt_utc.isoformat()}
+            if best_low is None or avg < best_low["temp"]:
+                best_low = {"temp": avg, "time": dt_utc.isoformat()}
+
+        out = {
+            "high": best_high["temp"] if best_high else None,
+            "high_time": best_high["time"] if best_high else "",
+            "low": best_low["temp"] if best_low else None,
+            "low_time": best_low["time"] if best_low else "",
+            "members": len(keys),
+        }
+
+        _WX_MARKET_FORECAST_CACHE[cache_key] = {"ts": now_ts, "data": out}
+        return out
+
+    except Exception as e:
+        return {
+            "high": None,
+            "high_time": "",
+            "low": None,
+            "low_time": "",
+            "members": 0,
+            "error": str(e),
+        }
+
 @app.get("/api/kalshi/market-board")
 async def kalshi_market_board():
     from datetime import datetime, timezone
@@ -2386,6 +2515,8 @@ async def kalshi_market_board():
                 "low": {"series": cfg["low"], "buckets": [], "error": None},
             },
         }
+
+        city_out["forecast"] = await _wx_fetch_market_forecast(city_key, cfg.get("tz", "UTC"))
 
         for market_type in ("high", "low"):
             series = cfg[market_type]
@@ -3063,6 +3194,8 @@ function render() {
     const obsValue = marketType === "high" ? c.obs?.obsHigh : c.obs?.obsLow;
     const obsTime = marketType === "high" ? c.obs?.obsHighTime : c.obs?.obsLowTime;
     const observedLabel = marketType === "high" ? "Observed HIGH" : "Observed LOW";
+    const forecastValue = marketType === "high" ? c.forecast?.high : c.forecast?.low;
+    const forecastTime = marketType === "high" ? c.forecast?.high_time : c.forecast?.low_time;
     const marketLabel = marketType.toUpperCase();
     const rest = buckets.slice(2, 6);
 
@@ -3080,6 +3213,7 @@ function render() {
         <div class="obs-code">Current observed: ${fmtTemp(c.obs?.obsTemp)}${c.obs?.obsTime ? " at " + localTime(c.obs.obsTime, c.tz) : ""}</div>
 
         <div class="airline">📊 ${observedLabel}: ${fmtTemp(obsValue)}${obsTime ? " at " + localTime(obsTime, c.tz) : ""} ✅</div>
+        <div class="airline">🔮 Forecasted ${observedLabel.replace("Observed ", "")}: ${fmtTemp(forecastValue)}${forecastTime ? " around " + localTime(forecastTime, c.tz) : ""}${c.forecast?.members ? " · N=" + c.forecast.members : ""}</div>
 
         <div class="bucket-list">
           ${lead ? bucketRow(lead, 0, obsLead) : ""}
@@ -3094,6 +3228,7 @@ function render() {
         <div class="small-data">
           <div class="small-row"><span>Observed bucket</span><strong>${obsLead ? displayBucketLabel(obsLead) : "—"}</strong></div>
           <div class="small-row"><span>Observed time</span><strong>${obsTime ? localTime(obsTime, c.tz) : "—"}</strong></div>
+          <div class="small-row"><span>Forecasted ${marketLabel}</span><strong>${fmtTemp(forecastValue)}${forecastTime ? " around " + localTime(forecastTime, c.tz) : ""}</strong></div>
           <div class="small-row"><span>Leader YES bid / ask</span><strong>${lead ? pricePair(lead) : "—"}</strong></div>
           <div class="small-row"><span>Contender YES bid / ask</span><strong>${cont ? pricePair(cont) : "—"}</strong></div>
           <div class="small-row"><span>Current observed temp</span><strong>${fmtTemp(c.obs?.obsTemp)}${c.obs?.obsTime ? " at " + localTime(c.obs.obsTime, c.tz) : ""}</strong></div>

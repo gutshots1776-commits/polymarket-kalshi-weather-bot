@@ -216,14 +216,14 @@ def build_rows(city: dict, days: int = 30) -> tuple[list[dict], dict, dict]:
 
 def yesterday_line(rows: list[dict], kind: str) -> str:
     if not rows:
-        return "yesterday n/a"
+        return "yesterday pending final CLI"
 
     r = rows[-1]
     f = r.get(f"forecast_{kind}")
     a = r.get(f"actual_{kind}")
 
     if f is None or a is None:
-        return "yesterday n/a"
+        return "yesterday pending final CLI"
 
     return f"yesterday fc {f}° / actual {a}° / {miss_text(f, a)}"
 
@@ -266,6 +266,7 @@ def main() -> int:
 
     print()
     print("Bias meaning: + means forecast ran warm. - means forecast ran cool.")
+    print("Pending final CLI means that city\'s latest official climate report has not posted yet.")
     return 0
 
 

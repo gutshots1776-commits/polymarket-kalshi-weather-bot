@@ -1,0 +1,427 @@
+{
+  "cities": {
+    "atl": {
+      "cli_pil": "CLIATL",
+      "high": {
+        "avg_abs_miss": 1.6896551724137931,
+        "bias": -1.4827586206896552,
+        "days": 29,
+        "latest": "yesterday pending final CLI",
+        "within_1_pct": 44.827586206896555
+      },
+      "key": "atl",
+      "low": {
+        "avg_abs_miss": 1.6551724137931034,
+        "bias": -1.5172413793103448,
+        "days": 29,
+        "latest": "yesterday pending final CLI",
+        "within_1_pct": 62.06896551724138
+      },
+      "name": "Atlanta",
+      "station": "KATL",
+      "timezone": "America/New_York"
+    },
+    "aus": {
+      "cli_pil": "CLIAUS",
+      "high": {
+        "avg_abs_miss": 1.1,
+        "bias": -1.1,
+        "days": 30,
+        "latest": "yesterday fc 87\u00b0 / actual 89\u00b0 / -2\u00b0 cool",
+        "within_1_pct": 66.66666666666666
+      },
+      "key": "aus",
+      "low": {
+        "avg_abs_miss": 1.5333333333333334,
+        "bias": 1.2666666666666666,
+        "days": 30,
+        "latest": "yesterday fc 79\u00b0 / actual 77\u00b0 / +2\u00b0 warm",
+        "within_1_pct": 53.333333333333336
+      },
+      "name": "Austin",
+      "station": "KAUS",
+      "timezone": "America/Chicago"
+    },
+    "bos": {
+      "cli_pil": "CLIBOS",
+      "high": {
+        "avg_abs_miss": 1.206896551724138,
+        "bias": -0.5172413793103449,
+        "days": 29,
+        "latest": "yesterday fc 75\u00b0 / actual 74\u00b0 / +1\u00b0 warm",
+        "within_1_pct": 65.51724137931035
+      },
+      "key": "bos",
+      "low": {
+        "avg_abs_miss": 3,
+        "bias": -2.6551724137931036,
+        "days": 29,
+        "latest": "yesterday fc 53\u00b0 / actual 56\u00b0 / -3\u00b0 cool",
+        "within_1_pct": 37.93103448275862
+      },
+      "name": "Boston",
+      "station": "KBOS",
+      "timezone": "America/New_York"
+    },
+    "chicago": {
+      "cli_pil": "CLIMDW",
+      "high": {
+        "avg_abs_miss": 0.7,
+        "bias": -0.1,
+        "days": 30,
+        "latest": "yesterday fc 83\u00b0 / actual 83\u00b0 / 0\u00b0",
+        "within_1_pct": 90.0
+      },
+      "key": "chicago",
+      "low": {
+        "avg_abs_miss": 1.5,
+        "bias": -1.1666666666666667,
+        "days": 30,
+        "latest": "yesterday fc 66\u00b0 / actual 66\u00b0 / 0\u00b0",
+        "within_1_pct": 50.0
+      },
+      "name": "Chicago",
+      "station": "KMDW",
+      "timezone": "America/Chicago"
+    },
+    "dal": {
+      "cli_pil": "CLIDFW",
+      "high": {
+        "avg_abs_miss": 1.8275862068965518,
+        "bias": -1.5517241379310345,
+        "days": 29,
+        "latest": "yesterday fc 94\u00b0 / actual 95\u00b0 / -1\u00b0 cool",
+        "within_1_pct": 48.275862068965516
+      },
+      "key": "dal",
+      "low": {
+        "avg_abs_miss": 0.8620689655172413,
+        "bias": 0.5172413793103449,
+        "days": 29,
+        "latest": "yesterday fc 78\u00b0 / actual 78\u00b0 / 0\u00b0",
+        "within_1_pct": 79.3103448275862
+      },
+      "name": "Dallas/Fort Worth",
+      "station": "KDFW",
+      "timezone": "America/Chicago"
+    },
+    "dc": {
+      "cli_pil": "CLIDCA",
+      "high": {
+        "avg_abs_miss": 1,
+        "bias": -0.2,
+        "days": 30,
+        "latest": "yesterday fc 78\u00b0 / actual 79\u00b0 / -1\u00b0 cool",
+        "within_1_pct": 76.66666666666667
+      },
+      "key": "dc",
+      "low": {
+        "avg_abs_miss": 1.7,
+        "bias": -0.8333333333333334,
+        "days": 30,
+        "latest": "yesterday fc 68\u00b0 / actual 65\u00b0 / +3\u00b0 warm",
+        "within_1_pct": 50.0
+      },
+      "name": "Washington DC",
+      "station": "KDCA",
+      "timezone": "America/New_York"
+    },
+    "denver": {
+      "cli_pil": "CLIDEN",
+      "high": {
+        "avg_abs_miss": 1.3333333333333333,
+        "bias": -1,
+        "days": 30,
+        "latest": "yesterday fc 80\u00b0 / actual 83\u00b0 / -3\u00b0 cool",
+        "within_1_pct": 56.666666666666664
+      },
+      "key": "denver",
+      "low": {
+        "avg_abs_miss": 2.2666666666666666,
+        "bias": 2.2,
+        "days": 30,
+        "latest": "yesterday fc 60\u00b0 / actual 58\u00b0 / +2\u00b0 warm",
+        "within_1_pct": 23.333333333333332
+      },
+      "name": "Denver",
+      "station": "KDEN",
+      "timezone": "America/Denver"
+    },
+    "hou": {
+      "cli_pil": "CLIHOU",
+      "high": {
+        "avg_abs_miss": 1.1,
+        "bias": -0.43333333333333335,
+        "days": 30,
+        "latest": "yesterday fc 90\u00b0 / actual 90\u00b0 / 0\u00b0",
+        "within_1_pct": 73.33333333333333
+      },
+      "key": "hou",
+      "low": {
+        "avg_abs_miss": 0.6,
+        "bias": 0.2,
+        "days": 30,
+        "latest": "yesterday fc 79\u00b0 / actual 79\u00b0 / 0\u00b0",
+        "within_1_pct": 93.33333333333333
+      },
+      "name": "Houston",
+      "station": "KHOU",
+      "timezone": "America/Chicago"
+    },
+    "los_angeles": {
+      "cli_pil": "CLILAX",
+      "high": {
+        "avg_abs_miss": 0.9655172413793104,
+        "bias": -0.9655172413793104,
+        "days": 29,
+        "latest": "yesterday pending final CLI",
+        "within_1_pct": 75.86206896551724
+      },
+      "key": "los_angeles",
+      "low": {
+        "avg_abs_miss": 2.1724137931034484,
+        "bias": -2.1724137931034484,
+        "days": 29,
+        "latest": "yesterday pending final CLI",
+        "within_1_pct": 31.03448275862069
+      },
+      "name": "Los Angeles",
+      "station": "KLAX",
+      "timezone": "America/Los_Angeles"
+    },
+    "lv": {
+      "cli_pil": "CLILAS",
+      "high": {
+        "avg_abs_miss": 0.8620689655172413,
+        "bias": -0.8620689655172413,
+        "days": 29,
+        "latest": "yesterday pending final CLI",
+        "within_1_pct": 82.75862068965517
+      },
+      "key": "lv",
+      "low": {
+        "avg_abs_miss": 1.206896551724138,
+        "bias": -0.6551724137931034,
+        "days": 29,
+        "latest": "yesterday pending final CLI",
+        "within_1_pct": 62.06896551724138
+      },
+      "name": "Las Vegas",
+      "station": "KLAS",
+      "timezone": "America/Los_Angeles"
+    },
+    "miami": {
+      "cli_pil": "CLIMIA",
+      "high": {
+        "avg_abs_miss": 1.7586206896551724,
+        "bias": -1.7586206896551724,
+        "days": 29,
+        "latest": "yesterday pending final CLI",
+        "within_1_pct": 41.37931034482759
+      },
+      "key": "miami",
+      "low": {
+        "avg_abs_miss": 1.1724137931034482,
+        "bias": -0.13793103448275862,
+        "days": 29,
+        "latest": "yesterday pending final CLI",
+        "within_1_pct": 75.86206896551724
+      },
+      "name": "Miami",
+      "station": "KMIA",
+      "timezone": "America/New_York"
+    },
+    "min": {
+      "cli_pil": "CLIMSP",
+      "high": {
+        "avg_abs_miss": 1.3,
+        "bias": -1.1,
+        "days": 30,
+        "latest": "yesterday fc 82\u00b0 / actual 85\u00b0 / -3\u00b0 cool",
+        "within_1_pct": 60.0
+      },
+      "key": "min",
+      "low": {
+        "avg_abs_miss": 1.3666666666666667,
+        "bias": -0.9,
+        "days": 30,
+        "latest": "yesterday fc 69\u00b0 / actual 69\u00b0 / 0\u00b0",
+        "within_1_pct": 60.0
+      },
+      "name": "Minneapolis",
+      "station": "KMSP",
+      "timezone": "America/Chicago"
+    },
+    "nola": {
+      "cli_pil": "CLIMSY",
+      "high": {
+        "avg_abs_miss": 1.0333333333333334,
+        "bias": -0.5666666666666667,
+        "days": 30,
+        "latest": "yesterday fc 86\u00b0 / actual 86\u00b0 / 0\u00b0",
+        "within_1_pct": 73.33333333333333
+      },
+      "key": "nola",
+      "low": {
+        "avg_abs_miss": 1.2666666666666666,
+        "bias": -0.8666666666666667,
+        "days": 30,
+        "latest": "yesterday fc 76\u00b0 / actual 77\u00b0 / -1\u00b0 cool",
+        "within_1_pct": 66.66666666666666
+      },
+      "name": "New Orleans",
+      "station": "KMSY",
+      "timezone": "America/Chicago"
+    },
+    "nyc": {
+      "cli_pil": "CLINYC",
+      "high": {
+        "avg_abs_miss": 1.6,
+        "bias": 1.5333333333333334,
+        "days": 30,
+        "latest": "yesterday fc 76\u00b0 / actual 75\u00b0 / +1\u00b0 warm",
+        "within_1_pct": 56.666666666666664
+      },
+      "key": "nyc",
+      "low": {
+        "avg_abs_miss": 1.9,
+        "bias": -0.9,
+        "days": 30,
+        "latest": "yesterday fc 61\u00b0 / actual 63\u00b0 / -2\u00b0 cool",
+        "within_1_pct": 36.666666666666664
+      },
+      "name": "New York City",
+      "station": "KNYC",
+      "timezone": "America/New_York"
+    },
+    "okc": {
+      "cli_pil": "CLIOKC",
+      "high": {
+        "avg_abs_miss": 1.3333333333333333,
+        "bias": -1,
+        "days": 30,
+        "latest": "yesterday fc 94\u00b0 / actual 96\u00b0 / -2\u00b0 cool",
+        "within_1_pct": 56.666666666666664
+      },
+      "key": "okc",
+      "low": {
+        "avg_abs_miss": 1.2,
+        "bias": 1.0666666666666667,
+        "days": 30,
+        "latest": "yesterday fc 77\u00b0 / actual 77\u00b0 / 0\u00b0",
+        "within_1_pct": 66.66666666666666
+      },
+      "name": "Oklahoma City",
+      "station": "KOKC",
+      "timezone": "America/Chicago"
+    },
+    "phi": {
+      "cli_pil": "CLIPHL",
+      "high": {
+        "avg_abs_miss": 1.5,
+        "bias": -1.3,
+        "days": 30,
+        "latest": "yesterday fc 79\u00b0 / actual 81\u00b0 / -2\u00b0 cool",
+        "within_1_pct": 46.666666666666664
+      },
+      "key": "phi",
+      "low": {
+        "avg_abs_miss": 2.033333333333333,
+        "bias": -1.3666666666666667,
+        "days": 30,
+        "latest": "yesterday fc 64\u00b0 / actual 62\u00b0 / +2\u00b0 warm",
+        "within_1_pct": 40.0
+      },
+      "name": "Philadelphia",
+      "station": "KPHL",
+      "timezone": "America/New_York"
+    },
+    "phx": {
+      "cli_pil": "CLIPHX",
+      "high": {
+        "avg_abs_miss": 1.3448275862068966,
+        "bias": -1.3448275862068966,
+        "days": 29,
+        "latest": "yesterday pending final CLI",
+        "within_1_pct": 58.620689655172406
+      },
+      "key": "phx",
+      "low": {
+        "avg_abs_miss": 0.9310344827586207,
+        "bias": -0.5172413793103449,
+        "days": 29,
+        "latest": "yesterday pending final CLI",
+        "within_1_pct": 82.75862068965517
+      },
+      "name": "Phoenix",
+      "station": "KPHX",
+      "timezone": "America/Phoenix"
+    },
+    "satx": {
+      "cli_pil": "CLISAT",
+      "high": {
+        "avg_abs_miss": 0.8,
+        "bias": -0.6,
+        "days": 30,
+        "latest": "yesterday fc 88\u00b0 / actual 91\u00b0 / -3\u00b0 cool",
+        "within_1_pct": 80.0
+      },
+      "key": "satx",
+      "low": {
+        "avg_abs_miss": 1.1333333333333333,
+        "bias": 0.5333333333333333,
+        "days": 30,
+        "latest": "yesterday fc 76\u00b0 / actual 76\u00b0 / 0\u00b0",
+        "within_1_pct": 73.33333333333333
+      },
+      "name": "San Antonio",
+      "station": "KSAT",
+      "timezone": "America/Chicago"
+    },
+    "sea": {
+      "cli_pil": "CLISEA",
+      "high": {
+        "avg_abs_miss": 1.5172413793103448,
+        "bias": -1.4482758620689655,
+        "days": 29,
+        "latest": "yesterday pending final CLI",
+        "within_1_pct": 55.172413793103445
+      },
+      "key": "sea",
+      "low": {
+        "avg_abs_miss": 0.9310344827586207,
+        "bias": -0.4482758620689655,
+        "days": 29,
+        "latest": "yesterday pending final CLI",
+        "within_1_pct": 75.86206896551724
+      },
+      "name": "Seattle",
+      "station": "KSEA",
+      "timezone": "America/Los_Angeles"
+    },
+    "sf": {
+      "cli_pil": "CLISFO",
+      "high": {
+        "avg_abs_miss": 1.3103448275862069,
+        "bias": 0.5517241379310345,
+        "days": 29,
+        "latest": "yesterday pending final CLI",
+        "within_1_pct": 65.51724137931035
+      },
+      "key": "sf",
+      "low": {
+        "avg_abs_miss": 1.7241379310344827,
+        "bias": -1.1724137931034482,
+        "days": 29,
+        "latest": "yesterday pending final CLI",
+        "within_1_pct": 48.275862068965516
+      },
+      "name": "San Francisco",
+      "station": "KSFO",
+      "timezone": "America/Los_Angeles"
+    }
+  },
+  "days_requested": 30,
+  "generated_at_utc": "2026-06-09T08:09:25.624094Z",
+  "source": "Open-Meteo historical forecast vs IEM archived NWS CLI"
+}

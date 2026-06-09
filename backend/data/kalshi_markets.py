@@ -125,16 +125,31 @@ async def fetch_kalshi_weather_markets(
                     if parsed["target_date"] < today:
                         continue
 
-                    yes_price = (m.get("yes_ask") or 0) / 100.0
-                    no_price = (m.get("no_ask") or 0) / 100.0
+                    # Use real Kalshi prices only. Do NOT assume 50c when prices are missing.
+                    yes_ask = m.get("yes_ask")
+                    yes_bid = m.get("yes_bid")
+                    no_ask = m.get("no_ask")
+                    no_bid = m.get("no_bid")
+                    last_price = m.get("last_price")
 
-                    # Fallback to last/mid prices
-                    if yes_price <= 0:
-                        yes_price = (m.get("last_price") or 50) / 100.0
-                    if no_price <= 0:
+                    if yes_ask is not None:
+                        yes_price = float(yes_ask) / 100.0
+                    elif yes_bid is not None:
+                        yes_price = float(yes_bid) / 100.0
+                    elif last_price is not None:
+                        yes_price = float(last_price) / 100.0
+                    else:
+                        # No real tradable/implied price available.
+                        continue
+
+                    if no_ask is not None:
+                        no_price = float(no_ask) / 100.0
+                    elif no_bid is not None:
+                        no_price = float(no_bid) / 100.0
+                    else:
                         no_price = 1.0 - yes_price
 
-                    # Skip fully resolved or illiquid
+                    # Skip fully resolved, bad, or missing prices.
                     if yes_price > 0.98 or yes_price < 0.02:
                         continue
 

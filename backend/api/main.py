@@ -1609,85 +1609,6 @@ function localTime(isoTime, tz) {
   } catch {
     return isoTime;
   }
-  function localTimeShort(d, tz) {
-    if (!d) return "—";
-    return new Date(d).toLocaleString(undefined, {
-      timeZone:tz, hour:"numeric", minute:"2-digit"
-    });
-  }
-
-  function durationText(ms) {
-    if (ms === null || ms === undefined || Number.isNaN(ms)) return "—";
-    const total = Math.max(0, Math.round(ms / 60000));
-    const h = Math.floor(total / 60);
-    const m = total % 60;
-    if (h > 0) return `${h}h ${m}m`;
-    return `${m}m`;
-  }
-
-  function nextHourlyFromObs(c) {
-    const base = c.obs?.obsTime ? new Date(c.obs.obsTime) : new Date();
-    const minute = c.obs?.obsTime ? base.getUTCMinutes() : 53;
-    const now = new Date();
-    let next = new Date(now);
-    next.setUTCMinutes(minute, 0, 0);
-    if (next <= now) next = new Date(next.getTime() + 60 * 60 * 1000);
-    return next;
-  }
-
-  function nextSixHourFromObs(c) {
-    const base = c.obs?.obsTime ? new Date(c.obs.obsTime) : new Date();
-    const minute = c.obs?.obsTime ? base.getUTCMinutes() : 53;
-    const now = new Date();
-    const hours = [0, 6, 12, 18, 24, 30];
-
-    for (const h of hours) {
-      const next = new Date(Date.UTC(
-        now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), h, minute, 0, 0
-      ));
-      if (next > now) return next;
-    }
-
-    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-    return new Date(Date.UTC(
-      tomorrow.getUTCFullYear(), tomorrow.getUTCMonth(), tomorrow.getUTCDate(), 0, minute, 0, 0
-    ));
-  }
-
-  function reportTile(label, nextDate, c, subline) {
-    const now = new Date();
-    const countdown = nextDate ? durationText(nextDate - now) : "—";
-    const nextText = nextDate ? localTimeShort(nextDate, c.tz) : "Schedule coming";
-
-    return `
-      <div class="station-tile">
-        <div class="station-tile-top">
-          <span class="station-pill">${label}</span>
-          <span class="station-countdown">${countdown}</span>
-        </div>
-        <div class="station-line">Next expected: ${nextText}</div>
-        ${subline ? `<div class="station-line">${subline}</div>` : ""}
-      </div>
-    `;
-  }
-
-  function stationReportsHtml(c) {
-    const hourly = nextHourlyFromObs(c);
-    const sixHour = nextSixHourFromObs(c);
-
-    return `
-      <div class="station-reports">
-        <div class="station-title">Station Reports</div>
-        <div class="station-grid">
-          ${reportTile("METAR", hourly, c, "Hourly station observation")}
-          ${reportTile("METAR 6h", sixHour, c, "6-hour high/low remarks")}
-          ${reportTile("CLI", null, c, "City schedule next")}
-          ${reportTile("DSM", null, c, "City schedule next")}
-        </div>
-      </div>
-    `;
-  }
-
 }
 
 function dayLabel(isoDate, idx) {
@@ -2879,76 +2800,6 @@ MARKET_BOARD_DASHBOARD_HTML = r"""
       overflow-wrap:anywhere;
     }
 
-    .station-reports {
-      margin:12px 0 14px;
-      border:1px solid rgba(148,163,184,.18);
-      border-radius:14px;
-      overflow:hidden;
-      background:rgba(0,0,0,.16);
-    }
-
-    .station-title {
-      padding:10px 12px;
-      font-size:13px;
-      font-weight:900;
-      color:var(--text);
-      border-bottom:1px solid rgba(148,163,184,.14);
-    }
-
-    .station-grid {
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:8px;
-      padding:10px;
-    }
-
-    .station-tile {
-      border:1px solid rgba(148,163,184,.18);
-      border-radius:12px;
-      padding:9px;
-      background:rgba(15,23,42,.62);
-      min-width:0;
-    }
-
-    .station-tile-top {
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      gap:8px;
-      margin-bottom:7px;
-    }
-
-    .station-pill {
-      display:inline-flex;
-      align-items:center;
-      border-radius:8px;
-      padding:4px 7px;
-      background:rgba(56,189,248,.10);
-      border:1px solid rgba(56,189,248,.20);
-      color:var(--accent);
-      font-weight:950;
-      font-size:12px;
-      white-space:nowrap;
-    }
-
-    .station-countdown {
-      color:var(--muted);
-      font-weight:850;
-      font-size:12px;
-      white-space:nowrap;
-    }
-
-    .station-line {
-      color:var(--muted);
-      font-size:11px;
-      line-height:1.35;
-      overflow-wrap:anywhere;
-    }
-
-    @media (max-width: 420px) {
-      .station-grid { grid-template-columns:1fr; }
-    }
-
     .bucket-list {
       display:grid;
       gap:8px;
@@ -3405,7 +3256,6 @@ function render() {
         <div class="airline">📊 ${observedLabel}: ${fmtTemp(obsValue)}${obsTime ? " at " + localTime(obsTime, c.tz) : ""} ✅</div>
         <div class="airline">🔮 Forecasted ${observedLabel.replace("Observed ", "")}: ${fmtTemp(forecastValue)}${forecastTime ? " around " + localTime(forecastTime, c.tz) : ""}${c.forecast?.members ? " · N=" + c.forecast.members : ""}</div>
 
-        ${stationReportsHtml(c)}
         <div class="bucket-list">
           ${lead ? bucketRow(lead, 0, obsLead) : ""}
           ${cont ? bucketRow(cont, 1, obsLead) : ""}

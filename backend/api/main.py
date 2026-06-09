@@ -3040,6 +3040,7 @@ MARKET_BOARD_DASHBOARD_HTML = r"""
 
 <script>
 let board = [];
+let forecastAccuracy = {};
 let marketType = "low";
 
 function fmtTemp(v) {
@@ -3373,6 +3374,48 @@ async function fetchMarketForecast(c) {
 }
 
 
+
+function fmtAccuracyNum(x, digits=1) {
+  if (x === null || x === undefined || Number.isNaN(Number(x))) return "—";
+  return Number(x).toFixed(digits);
+}
+
+function fmtAccuracyPct(x) {
+  if (x === null || x === undefined || Number.isNaN(Number(x))) return "—";
+  return `${Math.round(Number(x))}%`;
+}
+
+function fmtBias(x) {
+  if (x === null || x === undefined || Number.isNaN(Number(x))) return "—";
+  const n = Number(x);
+  if (Math.abs(n) < 0.05) return "0°";
+  return n > 0 ? `+${n.toFixed(1)}° warm` : `${n.toFixed(1)}° cool`;
+}
+
+function accuracyObj(c, mt) {
+  const cityKey = c.city_key || c.key;
+  const cityAcc = forecastAccuracy?.cities?.[cityKey] || {};
+  return cityAcc?.[mt] || null;
+}
+
+function accuracyLine(c, mt) {
+  const a = accuracyObj(c, mt);
+  if (!a) return "collecting data";
+  return `${a.days || 0}d avg miss ${fmtAccuracyNum(a.avg_abs_miss)}° · within 1° ${fmtAccuracyPct(a.within_1_pct)}`;
+}
+
+function accuracyYesterday(c, mt) {
+  const a = accuracyObj(c, mt);
+  if (!a || !a.latest) return "pending final CLI";
+  return String(a.latest).replace(/^yesterday\s+/i, "");
+}
+
+function accuracyBias(c, mt) {
+  const a = accuracyObj(c, mt);
+  if (!a) return "collecting data";
+  return fmtBias(a.bias);
+}
+
 function render() {
   const mode = document.getElementById("sortMode").value;
   let rows = [...board];
@@ -3446,9 +3489,9 @@ function render() {
           <div class="small-row"><span>Leader YES bid / ask</span><strong>${lead ? pricePair(lead) : "—"}</strong></div>
           <div class="small-row"><span>Contender YES bid / ask</span><strong>${cont ? pricePair(cont) : "—"}</strong></div>
           <div class="small-row"><span>Current observed temp</span><strong>${fmtTemp(c.obs?.obsTemp)}${c.obs?.obsTime ? " at " + localTime(c.obs.obsTime, c.tz) : ""}</strong></div>
-            <div class="small-row"><span>Forecast Accuracy</span><strong>collecting data</strong></div>
-            <div class="small-row"><span>Yesterday forecast</span><strong>waiting for saved snapshot</strong></div>
-            <div class="small-row"><span>7-day avg miss</span><strong>collecting data</strong></div>
+            <div class="small-row"><span>Forecast Accuracy</span><strong>${accuracyLine(c, marketType)}</strong></div>
+            <div class="small-row"><span>Yesterday forecast</span><strong>${accuracyYesterday(c, marketType)}</strong></div>
+            <div class="small-row"><span>30-day bias</span><strong>${accuracyBias(c, marketType)}</strong></div>
         </div>
 
         ${m.error ? `<div class="error">${m.error}</div>` : ""}
@@ -3467,6 +3510,13 @@ async function loadBoard(manual=false) {
 
   const res = await fetch("/api/kalshi/market-board", {cache:"no-store"});
   const data = await res.json();
+
+  try {
+    const accRes = await fetch("/api/forecast-accuracy", {cache:"no-store"});
+    if (accRes.ok) {
+      forecastAccuracy = await accRes.json();
+    }
+  } catch {}
 
   if (!data.ok) {
     status.textContent = data.error || "Failed to load market board";

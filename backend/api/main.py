@@ -3302,6 +3302,10 @@ function emptyMarketForecast(reason="") {
     high_time: "",
     low: null,
     low_time: "",
+    tomorrow_high: null,
+    tomorrow_high_time: "",
+    tomorrow_low: null,
+    tomorrow_low_time: "",
     members: 0,
     error: reason
   };
@@ -3316,15 +3320,26 @@ function parseMarketForecast(c, data) {
     return emptyMarketForecast("No forecast temps returned");
   }
 
-  const todayYmd = marketLocalYmd(new Date().toISOString(), c.tz);
+  const now = new Date();
+  const todayYmd = marketLocalYmd(now.toISOString(), c.tz);
+  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const tomorrowYmd = marketLocalYmd(tomorrow.toISOString(), c.tz);
+
   let high = null;
   let low = null;
   let highTime = "";
   let lowTime = "";
+
+  let tomorrowHigh = null;
+  let tomorrowLow = null;
+  let tomorrowHighTime = "";
+  let tomorrowLowTime = "";
+
   let maxMembers = 0;
 
   times.forEach((t, i) => {
-    if (marketLocalYmd(t, c.tz) !== todayYmd) return;
+    const localDay = marketLocalYmd(t, c.tz);
+    if (localDay !== todayYmd && localDay !== tomorrowYmd) return;
 
     const vals = keys
       .map(k => hourly[k]?.[i])
@@ -3338,14 +3353,28 @@ function parseMarketForecast(c, data) {
 
     if (avg === null || Number.isNaN(avg)) return;
 
-    if (high === null || avg > high) {
-      high = avg;
-      highTime = marketUtcIso(t);
+    if (localDay === todayYmd) {
+      if (high === null || avg > high) {
+        high = avg;
+        highTime = marketUtcIso(t);
+      }
+
+      if (low === null || avg < low) {
+        low = avg;
+        lowTime = marketUtcIso(t);
+      }
     }
 
-    if (low === null || avg < low) {
-      low = avg;
-      lowTime = marketUtcIso(t);
+    if (localDay === tomorrowYmd) {
+      if (tomorrowHigh === null || avg > tomorrowHigh) {
+        tomorrowHigh = avg;
+        tomorrowHighTime = marketUtcIso(t);
+      }
+
+      if (tomorrowLow === null || avg < tomorrowLow) {
+        tomorrowLow = avg;
+        tomorrowLowTime = marketUtcIso(t);
+      }
     }
   });
 
@@ -3354,6 +3383,10 @@ function parseMarketForecast(c, data) {
     high_time: highTime,
     low: low === null ? null : Math.round(low),
     low_time: lowTime,
+    tomorrow_high: tomorrowHigh === null ? null : Math.round(tomorrowHigh),
+    tomorrow_high_time: tomorrowHighTime,
+    tomorrow_low: tomorrowLow === null ? null : Math.round(tomorrowLow),
+    tomorrow_low_time: tomorrowLowTime,
     members: maxMembers,
     source: "browser"
   };
@@ -3487,6 +3520,8 @@ function render() {
           <div class="small-row"><span>Observed bucket</span><strong>${obsLead ? displayBucketLabel(obsLead) : "—"}</strong></div>
           <div class="small-row"><span>Observed time</span><strong>${obsTime ? localTime(obsTime, c.tz) : "—"}</strong></div>
           <div class="small-row"><span>Forecasted ${marketLabel}</span><strong>${fmtTemp(forecastValue)}${forecastTime ? " around " + localTime(forecastTime, c.tz) : ""}</strong></div>
+          <div class="small-row"><span>Tomorrow HIGH</span><strong>${fmtTemp(c.forecast?.tomorrow_high)}${c.forecast?.tomorrow_high_time ? " around " + localTime(c.forecast.tomorrow_high_time, c.tz) : ""}</strong></div>
+          <div class="small-row"><span>Tomorrow LOW</span><strong>${fmtTemp(c.forecast?.tomorrow_low)}${c.forecast?.tomorrow_low_time ? " around " + localTime(c.forecast.tomorrow_low_time, c.tz) : ""}</strong></div>
           <div class="small-row"><span>Leader YES bid / ask</span><strong>${lead ? pricePair(lead) : "—"}</strong></div>
           <div class="small-row"><span>Contender YES bid / ask</span><strong>${cont ? pricePair(cont) : "—"}</strong></div>
           <div class="small-row"><span>Current observed temp</span><strong>${fmtTemp(c.obs?.obsTemp)}${c.obs?.obsTime ? " at " + localTime(c.obs.obsTime, c.tz) : ""}</strong></div>

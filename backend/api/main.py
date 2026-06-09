@@ -3657,3 +3657,306 @@ async def debug_kalshi_series(series_ticker: str):
         "samples": samples,
     }
 
+
+TRADE_DASHBOARD_HTML = r"""
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>WX Bot Trade Dashboard</title>
+  <style>
+    :root {
+      --bg:#0b1220;
+      --card:#111827;
+      --card2:#172033;
+      --text:#e5e7eb;
+      --muted:#94a3b8;
+      --good:#22c55e;
+      --bad:#ef4444;
+      --warn:#f59e0b;
+      --line:rgba(148,163,184,.22);
+      --blue:#38bdf8;
+    }
+    * { box-sizing:border-box; }
+    body {
+      margin:0;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      background:linear-gradient(180deg,#0b1220,#111827);
+      color:var(--text);
+    }
+    .wrap { max-width:1200px; margin:0 auto; padding:18px; }
+    .top {
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      align-items:flex-start;
+      flex-wrap:wrap;
+      margin-bottom:16px;
+    }
+    h1 { margin:0; font-size:24px; }
+    .sub { color:var(--muted); margin-top:4px; font-size:14px; }
+    .btns { display:flex; gap:8px; flex-wrap:wrap; }
+    button, a.btn {
+      background:rgba(255,255,255,.92);
+      color:#0f172a !important;
+      border:1px solid rgba(15,23,42,.22);
+      border-radius:10px;
+      padding:9px 11px;
+      font-weight:800;
+      text-decoration:none;
+      cursor:pointer;
+      font-size:13px;
+    }
+    .grid {
+      display:grid;
+      grid-template-columns:repeat(4,minmax(0,1fr));
+      gap:12px;
+      margin-bottom:14px;
+    }
+    .card {
+      background:rgba(17,24,39,.92);
+      border:1px solid var(--line);
+      border-radius:16px;
+      padding:14px;
+      box-shadow:0 10px 28px rgba(0,0,0,.22);
+    }
+    .label { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.06em; }
+    .value { font-size:24px; font-weight:900; margin-top:6px; }
+    .good { color:var(--good); }
+    .bad { color:var(--bad); }
+    .warn { color:var(--warn); }
+    .blue { color:var(--blue); }
+    .section-title {
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:8px;
+      margin:20px 0 10px;
+    }
+    .section-title h2 { margin:0; font-size:18px; }
+    .pill {
+      border:1px solid var(--line);
+      background:rgba(56,189,248,.10);
+      color:#bae6fd;
+      border-radius:999px;
+      padding:4px 8px;
+      font-size:12px;
+      font-weight:800;
+    }
+    .trade-list { display:grid; gap:10px; }
+    .trade {
+      background:rgba(17,24,39,.92);
+      border:1px solid var(--line);
+      border-radius:16px;
+      padding:13px;
+    }
+    .trade-head {
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-bottom:10px;
+    }
+    .ticker { font-weight:900; overflow-wrap:anywhere; }
+    .meta { color:var(--muted); font-size:13px; margin-top:3px; }
+    .rows {
+      display:grid;
+      grid-template-columns:repeat(4,minmax(0,1fr));
+      gap:8px;
+    }
+    .mini {
+      background:rgba(148,163,184,.08);
+      border:1px solid rgba(148,163,184,.14);
+      border-radius:12px;
+      padding:8px;
+    }
+    .mini strong { display:block; margin-top:3px; }
+    .events { display:grid; gap:8px; }
+    .event {
+      border:1px solid var(--line);
+      background:rgba(17,24,39,.80);
+      border-radius:12px;
+      padding:10px;
+      font-size:13px;
+    }
+    .event .time { color:var(--muted); font-size:12px; }
+    .empty {
+      color:var(--muted);
+      border:1px dashed var(--line);
+      border-radius:14px;
+      padding:18px;
+      text-align:center;
+    }
+    @media (max-width:800px) {
+      .grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .rows { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .wrap { padding:14px; }
+    }
+    @media (max-width:420px) {
+      .grid { grid-template-columns:1fr; }
+      .rows { grid-template-columns:1fr; }
+      h1 { font-size:21px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div>
+        <h1>WX Bot Trade Dashboard</h1>
+        <div class="sub" id="statusLine">Loading bot stats...</div>
+      </div>
+      <div class="btns">
+        <button onclick="loadAll()">Refresh</button>
+        <a class="btn" href="/market-board">Market Board</a>
+        <a class="btn" href="/api/trades">Raw Trades</a>
+        <a class="btn" href="/api/events">Raw Events</a>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card"><div class="label">Bankroll</div><div class="value" id="bankroll">—</div></div>
+      <div class="card"><div class="label">Total P&L</div><div class="value" id="pnl">—</div></div>
+      <div class="card"><div class="label">Win Rate</div><div class="value" id="winrate">—</div></div>
+      <div class="card"><div class="label">Total Trades</div><div class="value" id="totalTrades">—</div></div>
+    </div>
+
+    <div class="section-title">
+      <h2>Open Trades</h2>
+      <span class="pill" id="openCount">0 open</span>
+    </div>
+    <div class="trade-list" id="openTrades"></div>
+
+    <div class="section-title">
+      <h2>Closed Trades</h2>
+      <span class="pill" id="closedCount">0 closed</span>
+    </div>
+    <div class="trade-list" id="closedTrades"></div>
+
+    <div class="section-title">
+      <h2>Recent Bot Events</h2>
+      <span class="pill">latest 25</span>
+    </div>
+    <div class="events" id="events"></div>
+  </div>
+
+<script>
+function money(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "—";
+  const sign = n > 0 ? "+" : "";
+  return sign + n.toLocaleString(undefined,{style:"currency",currency:"USD"});
+}
+function cents(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "—";
+  if (n <= 1) return Math.round(n * 100) + "¢";
+  return Math.round(n) + "¢";
+}
+function pct(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "—";
+  if (Math.abs(n) <= 1) return (n * 100).toFixed(1) + "%";
+  return n.toFixed(1) + "%";
+}
+function niceTime(v) {
+  if (!v) return "—";
+  try { return new Date(v).toLocaleString(); } catch { return String(v); }
+}
+async function getJson(url) {
+  const r = await fetch(url, {cache:"no-store"});
+  if (!r.ok) throw new Error(url + " HTTP " + r.status);
+  return await r.json();
+}
+function tradeStatus(t) {
+  if (t.settled) {
+    if ((Number(t.pnl) || 0) > 0) return '<span class="good">WIN</span>';
+    if ((Number(t.pnl) || 0) < 0) return '<span class="bad">LOSS</span>';
+    return '<span class="warn">SETTLED</span>';
+  }
+  return '<span class="blue">OPEN</span>';
+}
+function tradeCard(t) {
+  const pnl = Number(t.pnl || 0);
+  const pnlClass = pnl > 0 ? "good" : pnl < 0 ? "bad" : "";
+  const marketType = t.market_type || t.category || "trade";
+  return `
+    <div class="trade">
+      <div class="trade-head">
+        <div>
+          <div class="ticker">${t.market_ticker || t.ticker || "—"}</div>
+          <div class="meta">${marketType} · ${t.platform || "—"} · ${t.direction || "—"} · ${tradeStatus(t)}</div>
+        </div>
+        <div class="ticker ${pnlClass}">${t.settled ? money(t.pnl) : "Open"}</div>
+      </div>
+      <div class="rows">
+        <div class="mini"><span class="label">Entry</span><strong>${cents(t.entry_price)}</strong></div>
+        <div class="mini"><span class="label">Size</span><strong>${money(t.size)}</strong></div>
+        <div class="mini"><span class="label">Model Prob</span><strong>${pct(t.model_probability)}</strong></div>
+        <div class="mini"><span class="label">Market Prob</span><strong>${pct(t.market_price_at_entry)}</strong></div>
+        <div class="mini"><span class="label">Edge</span><strong>${pct(t.edge_at_entry)}</strong></div>
+        <div class="mini"><span class="label">Opened</span><strong>${niceTime(t.entry_time || t.created_at || t.timestamp)}</strong></div>
+        <div class="mini"><span class="label">Settled</span><strong>${niceTime(t.settlement_time)}</strong></div>
+        <div class="mini"><span class="label">Result</span><strong>${t.result || "—"}</strong></div>
+      </div>
+    </div>
+  `;
+}
+function renderTrades(trades) {
+  const open = trades.filter(t => !t.settled);
+  const closed = trades.filter(t => t.settled);
+  document.getElementById("openCount").textContent = `${open.length} open`;
+  document.getElementById("closedCount").textContent = `${closed.length} closed`;
+  document.getElementById("openTrades").innerHTML = open.length ? open.map(tradeCard).join("") : `<div class="empty">No open trades yet.</div>`;
+  document.getElementById("closedTrades").innerHTML = closed.length ? closed.slice(0,50).map(tradeCard).join("") : `<div class="empty">No closed trades yet.</div>`;
+}
+function renderEvents(events) {
+  const box = document.getElementById("events");
+  if (!events || !events.length) {
+    box.innerHTML = `<div class="empty">No events yet.</div>`;
+    return;
+  }
+  box.innerHTML = events.slice(0,25).map(e => `
+    <div class="event">
+      <div><strong>${e.type || "event"}</strong> — ${e.message || ""}</div>
+      <div class="time">${niceTime(e.timestamp)}</div>
+    </div>
+  `).join("");
+}
+async function loadAll() {
+  const status = document.getElementById("statusLine");
+  status.textContent = "Refreshing...";
+  try {
+    const [stats, trades, events] = await Promise.all([
+      getJson("/api/stats"),
+      getJson("/api/trades"),
+      getJson("/api/events?limit=25")
+    ]);
+
+    document.getElementById("bankroll").textContent = money(stats.bankroll);
+    const pnlEl = document.getElementById("pnl");
+    pnlEl.textContent = money(stats.total_pnl);
+    pnlEl.className = "value " + ((Number(stats.total_pnl)||0) > 0 ? "good" : (Number(stats.total_pnl)||0) < 0 ? "bad" : "");
+    document.getElementById("winrate").textContent = pct(stats.win_rate);
+    document.getElementById("totalTrades").textContent = stats.total_trades ?? trades.length ?? "—";
+
+    renderTrades(Array.isArray(trades) ? trades : []);
+    renderEvents(Array.isArray(events) ? events : []);
+
+    status.textContent = `Running: ${stats.is_running ? "YES" : "NO"} · Last refreshed ${new Date().toLocaleTimeString()}`;
+  } catch (e) {
+    status.textContent = "Error loading dashboard: " + e.message;
+  }
+}
+loadAll();
+setInterval(loadAll, 15000);
+</script>
+</body>
+</html>
+"""
+
+@app.get("/trade-dashboard", response_class=HTMLResponse)
+async def trade_dashboard():
+    return HTMLResponse(TRADE_DASHBOARD_HTML)
+

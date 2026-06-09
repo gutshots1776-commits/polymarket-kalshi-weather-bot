@@ -2982,15 +2982,16 @@ MARKET_BOARD_DASHBOARD_HTML = r"""
       display:inline-flex;
       align-items:center;
       justify-content:center;
-      margin-top:16px;
-      padding:12px 16px;
-      border-radius:10px;
-      color:#031018;
-      background:var(--green);
+      gap:6px;
+      margin:8px 8px 0 0;
+      padding:10px 12px;
+      border-radius:12px;
+      background:rgba(255,255,255,.94);
+      border:1px solid rgba(255,255,255,.85);
+      color:#0f172a !important;
+      font-weight:900;
       text-decoration:none;
-      font-weight:950;
-      width:fit-content;
-      max-width:100%;
+      box-shadow:0 6px 18px rgba(0,0,0,.22);
     }
 
     .error {

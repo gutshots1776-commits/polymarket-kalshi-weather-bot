@@ -3392,7 +3392,7 @@ function render() {
         <div class="obs-code">Current observed: ${fmtTemp(c.obs?.obsTemp)}${c.obs?.obsTime ? " at " + localTime(c.obs.obsTime, c.tz) : ""}</div>
 
         <div class="airline">📊 ${observedLabel}: ${fmtTemp(obsValue)}${obsTime ? " at " + localTime(obsTime, c.tz) : ""} ✅</div>
-        <div class="airline">🔮 Forecasted ${observedLabel.replace("Observed ", "")}: ${fmtTemp(forecastValue)}${forecastTime ? " around " + localTime(forecastTime, c.tz) : ""}${c.forecast?.members ? " · N=" + c.forecast.members : ""}</div>
+        <div class="airline">🔮 Forecasted ${observedLabel.replace("Observed ", "")}: ${fmtTemp(forecastValue)}${forecastTime ? " around " + localTime(forecastTime, c.tz) : ""}${c.forecast?.members ? " · N=" + c.forecast.members : ""}${c.forecast?.error ? " · " + c.forecast.error : ""}</div>
 
         <div class="bucket-list">
           ${lead ? bucketRow(lead, 0, obsLead) : ""}
@@ -3438,7 +3438,9 @@ async function loadBoard(manual=false) {
     return;
   }
 
-  const rows = await Promise.all((data.cities || []).map(async c => {
+  const rows = [];
+
+  for (const c of (data.cities || [])) {
     let obs = {};
     let forecast = c.forecast || emptyMarketForecast();
 
@@ -3456,8 +3458,11 @@ async function loadBoard(manual=false) {
       forecast = emptyMarketForecast(String(e.message || e));
     }
 
-    return {...c, obs, forecast};
-  }));
+    rows.push({...c, obs, forecast});
+
+    // Avoid hammering Open-Meteo from the browser with 20 simultaneous requests.
+    await new Promise(resolve => setTimeout(resolve, 175));
+  }
 
   board = rows;
   render();

@@ -123,8 +123,12 @@ def _celsius_to_fahrenheit(c: float) -> float:
 
 async def fetch_ensemble_forecast(city_key: str, target_date: Optional[date] = None) -> Optional[EnsembleForecast]:
     """
-    Fetch ensemble forecast from Open-Meteo Ensemble API (free, 31-member GFS).
-    Returns per-member daily max/min temperatures in Fahrenheit.
+    Fetch 31-member GFS ensemble forecast from Open-Meteo.
+
+    Anti-429 protections:
+    - Successful forecasts are cached for _CACHE_TTL.
+    - Failed forecasts, including 429s, are cached for _FAILURE_CACHE_TTL.
+    - The signal scanner also reuses one city/date forecast across all buckets.
     """
     if city_key not in CITY_CONFIG:
         logger.warning(f"Unknown city key: {city_key}")
@@ -135,6 +139,7 @@ async def fetch_ensemble_forecast(city_key: str, target_date: Optional[date] = N
 
     cache_key = f"{city_key}_{target_date.isoformat()}"
     now = time.time()
+
     if cache_key in _forecast_cache:
         cached_time, cached_forecast = _forecast_cache[cache_key]
         ttl = _FAILURE_CACHE_TTL if cached_forecast is None else _CACHE_TTL
@@ -144,62 +149,113 @@ async def fetch_ensemble_forecast(city_key: str, target_date: Optional[date] = N
     city = CITY_CONFIG[city_key]
 
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            # Open-Meteo forecast API — lighter ECMWF hourly request.
-            # This matches the working bot style: fetch hourly temperature_2m,
-            # then derive high/low from the hourly forecast.
-            params = {
-                "latitude": city["lat"],
-                "longitude": city["lon"],
-                "hourly": "temperature_2m",
-                "models": "ecmwf_ifs025",
-                "forecast_days": 2,
-                "temperature_unit": "fahrenheit",
-                "timezone": "UTC",
-            }
+        from datetime import datetime, timezone
+        from zoneinfo import ZoneInfo
 
+        tz_name = city.get("tz", "UTC")
+        try:
+            city_tz = ZoneInfo(tz_name)
+        except Exception:
+            city_tz = ZoneInfo("UTC")
+
+        params = {
+            "latitude": city["lat"],
+            "longitude": city["lon"],
+            "hourly": "temperature_2m",
+            "models": "gfs_seamless",
+            "forecast_days": 3,
+            "temperature_unit": "fahrenheit",
+            "timezone": "UTC",
+        }
+
+        async with httpx.AsyncClient(timeout=20.0) as client:
             response = await client.get(
-                "https://api.open-meteo.com/v1/forecast",
+                "https://ensemble-api.open-meteo.com/v1/ensemble",
                 params=params,
             )
+
+            if response.status_code == 429:
+                _forecast_cache[cache_key] = (time.time(), None)
+                logger.warning(f"Open-Meteo 429 cached for {city_key} on {target_date}")
+                return None
+
             response.raise_for_status()
             data = response.json()
 
-            hourly = data.get("hourly", {})
-            temps = hourly.get("temperature_2m", [])
-            temps = [float(t) for t in temps if t is not None]
+        hourly = data.get("hourly", {}) or {}
+        times = hourly.get("time", []) or []
 
-            member_highs = []
-            member_lows = []
+        temp_keys = [
+            k for k in hourly.keys()
+            if k == "temperature_2m" or k.startswith("temperature_2m_member")
+        ]
 
-            if temps:
-                member_highs.append(max(temps))
-                member_lows.append(min(temps))
+        if not times or not temp_keys:
+            logger.warning(f"No ensemble hourly data for {city_key} on {target_date}")
+            _forecast_cache[cache_key] = (time.time(), None)
+            return None
 
-            if not member_highs:
-                logger.warning(f"No ensemble data for {city_key} on {target_date}")
-                return None
+        member_highs = []
+        member_lows = []
 
-            forecast = EnsembleForecast(
-                city_key=city_key,
-                city_name=city["name"],
-                target_date=target_date,
-                member_highs=member_highs,
-                member_lows=member_lows,
-            )
+        for key in temp_keys:
+            vals = hourly.get(key, []) or []
+            local_day_temps = []
 
-            _forecast_cache[cache_key] = (now, forecast)
-            logger.info(f"Ensemble forecast for {city['name']} on {target_date}: "
-                        f"High {forecast.mean_high:.1f}F +/- {forecast.std_high:.1f}F "
-                        f"({forecast.num_members} ECMWF-derived sample(s))")
+            for i, raw_time in enumerate(times):
+                if i >= len(vals):
+                    continue
 
-            return forecast
+                temp = vals[i]
+                if temp is None:
+                    continue
+
+                try:
+                    dt_utc = datetime.fromisoformat(str(raw_time).replace("Z", "")).replace(tzinfo=timezone.utc)
+                    dt_local = dt_utc.astimezone(city_tz)
+                except Exception:
+                    continue
+
+                if dt_local.date() != target_date:
+                    continue
+
+                try:
+                    local_day_temps.append(float(temp))
+                except Exception:
+                    continue
+
+            if local_day_temps:
+                member_highs.append(max(local_day_temps))
+                member_lows.append(min(local_day_temps))
+
+        if not member_highs or not member_lows:
+            logger.warning(f"No usable ensemble members for {city_key} on {target_date}")
+            _forecast_cache[cache_key] = (time.time(), None)
+            return None
+
+        forecast = EnsembleForecast(
+            city_key=city_key,
+            city_name=city["name"],
+            target_date=target_date,
+            member_highs=member_highs,
+            member_lows=member_lows,
+        )
+
+        _forecast_cache[cache_key] = (now, forecast)
+
+        logger.info(
+            f"31-member GFS ensemble forecast for {city['name']} on {target_date}: "
+            f"High {forecast.mean_high:.1f}F +/- {forecast.std_high:.1f}F, "
+            f"Low {forecast.mean_low:.1f}F +/- {forecast.std_low:.1f}F "
+            f"({forecast.num_members} members)"
+        )
+
+        return forecast
 
     except Exception as e:
-        # Cache failures too, especially 429 rate limits, so one bad response
-        # does not turn into repeated calls during the same scan.
+        # Cache failures too, especially 429/rate-limit style failures.
         _forecast_cache[cache_key] = (time.time(), None)
-        logger.warning(f"Failed to fetch ensemble forecast for {city_key}: {e}")
+        logger.warning(f"Failed to fetch 31-member ensemble forecast for {city_key}: {e}")
         return None
 
 

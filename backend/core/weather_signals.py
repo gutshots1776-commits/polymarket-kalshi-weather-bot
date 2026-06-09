@@ -195,6 +195,10 @@ async def scan_for_weather_signals() -> List[WeatherTradingSignal]:
                     market.target_date,
                 )
 
+                # Small pause between brand-new Open-Meteo requests to reduce 429 risk.
+                import asyncio
+                await asyncio.sleep(1.25)
+
             signal = await generate_weather_signal(market, scan_forecasts[forecast_key])
             if signal:
                 signals.append(signal)

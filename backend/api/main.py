@@ -3012,6 +3012,10 @@ function kalshiMarketUrl(ticker) {
   if (!ticker) return "https://kalshi.com/markets";
   return `https://kalshi.com/markets/${ticker}`;
 }
+  function metarUrl(c) {
+    const station = encodeURIComponent(c.station || "");
+    return `https://portal-dev.accuweather.com/metar?station=${station}&hours=48&metartype=all`;
+  }
 function obsUrl(c) {
   const end = new Date();
   const start = new Date(end.getTime() - 36 * 60 * 60 * 1000);
@@ -3237,6 +3241,7 @@ function render() {
         ${m.error ? `<div class="error">${m.error}</div>` : ""}
 
         <a class="kalshi-link" href="${kalshiMarketUrl(lead?.ticker)}" target="_blank" rel="noopener">🔗 Trade on Kalshi</a>
+        <a class="kalshi-link" href="${metarUrl(c)}" target="_blank" rel="noopener">🧾 Hourly METAR</a>
       </div>
     `;
   }).join("");
